@@ -2,7 +2,7 @@
 
 import Layout from '@/components/Layout';
 import {useSearchParams, useRouter} from 'next/navigation';
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
@@ -23,26 +23,31 @@ export default function ReceiptDetailsPage() {
 
 function ReceiptDetailsContent() {
   const searchParams = useSearchParams();
-  const clientName = searchParams.get('clientName') || '[Client Name]';
-  const [metal, setMetal] = useState('');
-  const [weight, setWeight] = useState('');
-  const [weightUnit, setWeightUnit] = useState('');
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [items, setItems] = useState([
-    {
-      sNo: 1,
-      itemName: '',
-      tag: '',
-      grossWt: 0,
-      stoneWt: 0,
-      netWt: 0,
-      meltingTouch: 0,
-      finalWt: 0,
-      stoneAmt: 0,
-    },
-  ]);
-  const {toast} = useToast();
   const router = useRouter();
+  const {toast} = useToast();
+
+  // Extract receipt details from search parameters
+  const clientName = searchParams.get('clientName') || '[Client Name]';
+  const dateParam = searchParams.get('date');
+  const metalParam = searchParams.get('metal');
+  const weightParam = searchParams.get('weight');
+  const weightUnitParam = searchParams.get('weightUnit');
+  const itemsParam = searchParams.get('items');
+
+  // Parse date, weight, and items from URL parameters
+  const [date, setDate] = useState<Date | undefined>(
+    dateParam ? new Date(dateParam) : undefined
+  );
+  const [metal, setMetal] = useState(metalParam || '');
+  const [weight, setWeight] = useState(weightParam || '');
+  const [weightUnit, setWeightUnit] = useState(weightUnitParam || '');
+  const [items, setItems] = useState<any[]>(itemsParam ? JSON.parse(itemsParam) : []);
+
+  useEffect(() => {
+    if (dateParam) {
+      setDate(new Date(dateParam));
+    }
+  }, [dateParam]);
 
   const handleAddItem = () => {
     setItems([
@@ -179,7 +184,7 @@ function ReceiptDetailsContent() {
               </PopoverContent>
             </Popover>
 
-            <Select onValueChange={setMetal}>
+            <Select onValueChange={setMetal} value={metal}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select Metal" />
               </SelectTrigger>
@@ -197,7 +202,7 @@ function ReceiptDetailsContent() {
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
               />
-              <Select onValueChange={setWeightUnit}>
+              <Select onValueChange={setWeightUnit} value={weightUnit}>
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>

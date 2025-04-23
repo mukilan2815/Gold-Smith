@@ -6,6 +6,7 @@ import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {useRouter} from 'next/navigation';
 
 export default function BillPage() {
   return (
@@ -20,6 +21,7 @@ function BillContent() {
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
   const [receipts, setReceipts] = useState<any[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     // Load receipts from localStorage
@@ -34,6 +36,15 @@ function BillContent() {
       receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
     );
   });
+
+  const handleViewReceipt = (receipt: any) => {
+    // Navigate to a new page to display the receipt details
+    router.push(
+      `/receipt/details?clientName=${receipt.clientName}&date=${receipt.date}&metal=${receipt.metal}&weight=${receipt.weight}&weightUnit=${receipt.weightUnit}&items=${JSON.stringify(
+        receipt.items
+      )}`
+    );
+  };
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-8">
@@ -81,7 +92,7 @@ function BillContent() {
                       </p>
                       {/* Display other receipt details as needed */}
                     </div>
-                    <Button onClick={() => console.log('View Receipt Clicked')}>
+                    <Button onClick={() => handleViewReceipt(receipt)}>
                       View Receipt
                     </Button>
                   </li>
