@@ -1,3 +1,4 @@
+'use client';
 
 import Layout from '@/components/Layout';
 
@@ -8,8 +9,6 @@ export default function ReceiptDetailsPage() {
     </Layout>
   );
 }
-
-'use client';
 
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
@@ -287,5 +286,3 @@ function ReceiptDetailsContent() {
     </div>
   );
 }
-
-    
