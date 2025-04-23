@@ -1,5 +1,11 @@
+'use client';
 
 import Layout from '@/components/Layout';
+
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
 export default function BillPage() {
   return (
@@ -8,13 +14,6 @@ export default function BillPage() {
     </Layout>
   );
 }
-
-'use client';
-
-import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
 function BillContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
@@ -61,5 +60,3 @@ function BillContent() {
     </div>
   );
 }
-
-    
