@@ -166,55 +166,37 @@ function ReceiptDetailsContent() {
   };
 
   const downloadReceipt = () => {
-    if (summaryRef.current) {
-      const doc = new jsPDF();
+    const doc = new jsPDF();
 
-      // Add the summary content to the PDF
-      doc.text(`Name: ${clientName}`, 10, 10);
-      doc.text(`Date: ${date ? format(date, 'PPP') : 'No date selected'}`, 10, 20);
-      doc.text(`Metals: ${metal || 'No metal selected'}`, 10, 30);
-      doc.text(
-        `Weight: ${weight ? `${weight} ${weightUnit || 'Unit not selected'}` : 'Weight not specified'}`,
-        10,
-        40
-      );
+    // Add the summary content to the PDF
+    doc.text(`Name: ${clientName}`, 10, 10);
+    doc.text(`Date: ${date ? format(date, 'PPP') : 'No date selected'}`, 10, 20);
+    doc.text(`Metals: ${metal || 'No metal selected'}`, 10, 30);
+    doc.text(
+      `Weight: ${weight ? `${weight} ${weightUnit || 'Unit not selected'}` : 'Weight not specified'}`,
+      10,
+      40
+    );
 
-      // Prepare table data for items
-      const tableColumn = ['Item Name', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Final (wt)', 'Stone Amt'];
-      const tableRows = items.map((item) => [
-        item.itemName,
-        item.grossWt,
-        item.stoneWt,
-        item.netWt.toFixed(3),
-        item.finalWt.toFixed(3),
-        item.stoneAmt,
-      ]);
+    // Prepare table data for items
+    const tableColumn = ['Item Name', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Final (wt)', 'Stone Amt'];
+    const tableRows = items.map((item) => [
+      item.itemName,
+      item.grossWt,
+      item.stoneWt,
+      item.netWt,
+      item.finalWt,
+      item.stoneAmt,
+    ]);
 
-      // Add the table to the PDF
-      autoTable({
-        head: [tableColumn],
-        body: tableRows,
-        startY: 50,
-        didDrawPage: function (data) {
-          // Add total row
-          doc.setFontSize(10);
-          const totalRowY = data.table.body.length > 0 ? data.table.body[data.table.body.length - 1].y + 10 : 70;
-          doc.text(`Total Gross Wt: ${calculateTotal('grossWt')}`, 10, totalRowY);
-          doc.text(`Total Stone Wt: ${calculateTotal('stoneWt')}`, 60, totalRowY);
-          doc.text(`Total Net Wt: ${calculateTotal('netWt')}`, 110, totalRowY);
-          doc.text(`Total Final Wt: ${calculateTotal('finalWt')}`, 160, totalRowY);
-          doc.text(`Total Stone Amt: ${calculateTotal('stoneAmt')}`, 10, totalRowY + 10);
-        },
-      });
+    // Add the table to the PDF
+    autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 50,
+    });
 
-      doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Could not generate PDF.',
-      });
-    }
+    doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
   };
 
   return (
