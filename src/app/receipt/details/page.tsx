@@ -168,14 +168,36 @@ function ReceiptDetailsContent() {
   const downloadReceipt = () => {
     const doc = new jsPDF();
 
+    // Define colors
+    const primaryColor = '#FFD700'; // Gold
+    const secondaryColor = '#FFFDD0'; // Cream
+    const textColor = '#000000';     // Black
+    const accentColor = '#008080';   // Teal
+
+    // Add background color
+    doc.setFillColor(secondaryColor);
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+
+    // Set text color
+    doc.setTextColor(textColor);
+
     // Add the summary content to the PDF
-    doc.text(`Name: ${clientName}`, 10, 10);
-    doc.text(`Date: ${date ? format(date, 'PPP') : 'No date selected'}`, 10, 20);
-    doc.text(`Metals: ${metal || 'No metal selected'}`, 10, 30);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(primaryColor); // Gold color for the title
+    doc.text(`Goldsmith Receipt`, 10, 10);
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(textColor);
+
+    doc.text(`Name: ${clientName}`, 10, 20);
+    doc.text(`Date: ${date ? format(date, 'PPP') : 'No date selected'}`, 10, 30);
+    doc.text(`Metals: ${metal || 'No metal selected'}`, 10, 40);
     doc.text(
       `Weight: ${weight ? `${weight} ${weightUnit || 'Unit not selected'}` : 'Weight not specified'}`,
       10,
-      40
+      50
     );
 
     // Prepare table data for items
@@ -206,11 +228,29 @@ function ReceiptDetailsContent() {
       totalStoneAmt,
     ]);
 
+    // Define table style
+    const tableStyle = {
+      headStyles: {
+        fillColor: accentColor, // Teal color for header
+        textColor: secondaryColor,
+        fontStyle: 'bold',
+        fontSize: 12,
+      },
+      bodyStyles: {
+        textColor: textColor,
+        fontSize: 10,
+      },
+      alternateRowStyles: {
+        fillColor: secondaryColor,
+      },
+    };
+
     // Add the table to the PDF
-    autoTable(doc, {
+    (autoTable as any)(doc, {
       head: [tableColumn],
       body: tableRows,
-      startY: 50,
+      startY: 60,
+      styles: tableStyle,
     });
 
     doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
