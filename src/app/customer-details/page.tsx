@@ -1,3 +1,4 @@
+'use client';
 
 import Layout from '@/components/Layout';
 
@@ -9,7 +10,6 @@ export default function CustomerDetailsPage() {
   );
 }
 
-'use client';
 
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 
