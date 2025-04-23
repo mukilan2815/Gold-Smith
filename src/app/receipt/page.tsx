@@ -1,5 +1,12 @@
+'use client';
 
 import Layout from '@/components/Layout';
+
+import {useState} from 'react';
+import {useRouter} from 'next/navigation';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
 export default function ReceiptPage() {
   return (
@@ -8,14 +15,6 @@ export default function ReceiptPage() {
     </Layout>
   );
 }
-
-'use client';
-
-import {useState} from 'react';
-import {useRouter} from 'next/navigation';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
 function ReceiptContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
@@ -70,5 +69,3 @@ function ReceiptContent() {
     </div>
   );
 }
-
-    
