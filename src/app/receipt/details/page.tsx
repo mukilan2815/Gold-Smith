@@ -184,8 +184,8 @@ function ReceiptDetailsContent() {
       item.itemName,
       item.grossWt,
       item.stoneWt,
-      item.netWt,
-      item.finalWt,
+      item.netWt?.toFixed(3) || '0.000',
+      item.finalWt?.toFixed(3) || '0.000',
       item.stoneAmt,
     ]);
 
