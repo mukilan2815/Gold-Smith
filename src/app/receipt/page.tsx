@@ -1,8 +1,7 @@
 'use client';
 
 import Layout from '@/components/Layout';
-
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -20,11 +19,31 @@ function ReceiptContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
+  const [clients, setClients] = useState<any[]>([]);
   const router = useRouter();
 
-  const handleClientSelection = () => {
+  useEffect(() => {
+    // Load clients from localStorage
+    const storedClients = localStorage.getItem('clients');
+    if (storedClients) {
+      setClients(JSON.parse(storedClients));
+    }
+  }, []);
+
+  const filteredClients = clients.filter((client) => {
+    return (
+      client.shopName.toLowerCase().includes(shopNameFilter.toLowerCase()) &&
+      client.clientName.toLowerCase().includes(clientNameFilter.toLowerCase()) &&
+      client.phoneNumber.includes(phoneNumberFilter)
+    );
+  });
+
+  const handleClientSelection = (client: any) => {
     // Navigate to Receipt Page 2 with client details
-    router.push('/receipt/details');
+    router.push({
+      pathname: '/receipt/details',
+      query: {clientName: client.clientName},
+    });
   };
 
   return (
@@ -55,14 +74,38 @@ function ReceiptContent() {
             />
           </div>
 
-          {/* Placeholder for Client List - Replace with actual data and rendering */}
-          <div className="border rounded-md p-4">
-            <p className="text-muted-foreground">
-              Client List (Replace this with actual client data)
-            </p>
-            <Button onClick={handleClientSelection} className="mt-4">
-              Select Client
-            </Button>
+          {/* Client List */}
+          <div>
+            {filteredClients.length > 0 ? (
+              <ul>
+                {filteredClients.map((client, index) => (
+                  <li
+                    key={index}
+                    className="border rounded-md p-4 mb-2 flex justify-between items-center"
+                  >
+                    <div>
+                      <p>
+                        <strong>Shop Name:</strong> {client.shopName}
+                      </p>
+                      <p>
+                        <strong>Client Name:</strong> {client.clientName}
+                      </p>
+                      <p>
+                        <strong>Phone Number:</strong> {client.phoneNumber}
+                      </p>
+                      <p>
+                        <strong>Address:</strong> {client.address}
+                      </p>
+                    </div>
+                    <Button onClick={() => handleClientSelection(client)}>
+                      Select Client
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No clients found.</p>
+            )}
           </div>
         </CardContent>
       </Card>

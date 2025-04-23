@@ -1,15 +1,7 @@
 'use client';
 
 import Layout from '@/components/Layout';
-
-export default function ReceiptDetailsPage() {
-  return (
-    <Layout>
-      <ReceiptDetailsContent />
-    </Layout>
-  );
-}
-
+import {useSearchParams} from 'next/navigation';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -21,6 +13,8 @@ import {format} from 'date-fns';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
 function ReceiptDetailsContent() {
+  const searchParams = useSearchParams();
+  const clientName = searchParams.get('clientName') || '[Client Name]';
   const [metal, setMetal] = useState('');
   const [weight, setWeight] = useState('');
   const [weightUnit, setWeightUnit] = useState('');
@@ -234,7 +228,7 @@ function ReceiptDetailsContent() {
           {/* Summary */}
           <div className="mt-4 p-4 border rounded-md">
             <h3 className="text-xl font-semibold">Summary</h3>
-            <p>Name: [Client Name]</p>
+            <p>Name: {clientName}</p>
             <p>Date: {date ? format(date, 'PPP') : 'No date selected'}</p>
             <p>Metals: {metal || 'No metal selected'}</p>
             <p>

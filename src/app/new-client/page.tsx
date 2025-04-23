@@ -1,7 +1,6 @@
 'use client';
 
 import Layout from '@/components/Layout';
-
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -25,11 +24,49 @@ function NewClientContent() {
   const {toast} = useToast();
 
   const handleSaveClient = async () => {
-    // Basic save logic (replace with Firestore)
+    // Validate input
+    if (
+      shopName.trim() === '' ||
+      clientName.trim() === '' ||
+      phoneNumber.trim() === '' ||
+      address.trim() === ''
+    ) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please fill in all fields.',
+      });
+      return;
+    }
+
+    // Retrieve existing clients from localStorage
+    const existingClients = localStorage.getItem('clients');
+    let clients = existingClients ? JSON.parse(existingClients) : [];
+
+    // Create new client object
+    const newClient = {
+      shopName: shopName,
+      clientName: clientName,
+      phoneNumber: phoneNumber,
+      address: address,
+    };
+
+    // Add the new client to the array
+    clients.push(newClient);
+
+    // Save the updated clients array back to localStorage
+    localStorage.setItem('clients', JSON.stringify(clients));
+
     toast({
       title: 'Client Saved!',
       description: `${clientName}'s details have been saved.`,
     });
+
+    // Clear the form
+    setShopName('');
+    setClientName('');
+    setPhoneNumber('');
+    setAddress('');
   };
 
   return (
@@ -81,4 +118,3 @@ function NewClientContent() {
     </div>
   );
 }
-
