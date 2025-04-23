@@ -190,7 +190,7 @@ function ReceiptDetailsContent() {
     ]);
 
     // Add the table to the PDF
-    autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 50,
@@ -299,7 +299,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.grossWt || ''}
+                        value={item.grossWt !== null ? item.grossWt : ''}
                         onChange={(e) =>
                           handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
@@ -308,7 +308,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneWt || ''}
+                        value={item.stoneWt !== null ? item.stoneWt : ''}
                         onChange={(e) =>
                           handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
@@ -318,7 +318,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.meltingTouch || ''}
+                        value={item.meltingTouch !== null ? item.meltingTouch : ''}
                         onChange={(e) =>
                           handleInputChange(
                             index,
@@ -332,7 +332,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneAmt || ''}
+                        value={item.stoneAmt !== null ? item.stoneAmt : ''}
                         onChange={(e) =>
                           handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
