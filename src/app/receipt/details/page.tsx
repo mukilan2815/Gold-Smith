@@ -189,6 +189,23 @@ function ReceiptDetailsContent() {
       item.stoneAmt,
     ]);
 
+    // Calculate totals
+    const totalGrossWt = calculateTotal('grossWt');
+    const totalStoneWt = calculateTotal('stoneWt');
+    const totalNetWt = calculateTotal('netWt');
+    const totalFinalWt = calculateTotal('finalWt');
+    const totalStoneAmt = calculateTotal('stoneAmt');
+
+    // Add total row
+    tableRows.push([
+      'Total',
+      totalGrossWt,
+      totalStoneWt,
+      totalNetWt.toFixed(3),
+      totalFinalWt.toFixed(3),
+      totalStoneAmt,
+    ]);
+
     // Add the table to the PDF
     autoTable(doc, {
       head: [tableColumn],
@@ -346,9 +363,9 @@ function ReceiptDetailsContent() {
                   <td className="p-2 border"></td>
                   <td className="p-2 border">{calculateTotal('grossWt')}</td>
                   <td className="p-2 border">{calculateTotal('stoneWt')}</td>
-                  <td className="p-2 border">{calculateTotal('netWt')}</td>
+                  <td className="p-2 border">{calculateTotal('netWt')?.toFixed(3) || '0.000'}</td>
                   <td className="p-2 border"></td>
-                  <td className="p-2 border">{calculateTotal('finalWt')}</td>
+                  <td className="p-2 border">{calculateTotal('finalWt')?.toFixed(3) || '0.000'}</td>
                   <td className="p-2 border">{calculateTotal('stoneAmt')}</td>
                 </tr>
               </tbody>
@@ -398,8 +415,8 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">Total</td>
                     <td className="p-2 border">{calculateTotal('grossWt')}</td>
                     <td className="p-2 border">{calculateTotal('stoneWt')}</td>
-                    <td className="p-2 border">{calculateTotal('netWt')}</td>
-                    <td className="p-2 border">{calculateTotal('finalWt')}</td>
+                    <td className="p-2 border">{calculateTotal('netWt')?.toFixed(3) || '0.000'}</td>
+                    <td className="p-2 border">{calculateTotal('finalWt')?.toFixed(3) || '0.000'}</td>
                     <td className="p-2 border">{calculateTotal('stoneAmt')}</td>
                   </tr>
                 </tbody>
