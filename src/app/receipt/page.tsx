@@ -40,10 +40,7 @@ function ReceiptContent() {
 
   const handleClientSelection = (client: any) => {
     // Navigate to Receipt Page 2 with client details
-    router.push({
-      pathname: '/receipt/details',
-      query: {clientName: client.clientName},
-    });
+    router.push(`/receipt/details?clientName=${client.clientName}`);
   };
 
   return (
