@@ -2,7 +2,7 @@
 
 import Layout from '@/components/Layout';
 
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
@@ -19,6 +19,21 @@ function BillContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
+  const [receipts, setReceipts] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Load receipts from localStorage
+    const storedReceipts = localStorage.getItem('receipts');
+    if (storedReceipts) {
+      setReceipts(JSON.parse(storedReceipts));
+    }
+  }, []);
+
+  const filteredReceipts = receipts.filter((receipt) => {
+    return (
+      receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
+    );
+  });
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-8">
@@ -48,12 +63,33 @@ function BillContent() {
             />
           </div>
 
-          {/* Placeholder for Receipt List - Replace with actual data and rendering */}
-          <div className="border rounded-md p-4">
-            <p className="text-muted-foreground">
-              Receipt List (Replace this with actual receipt data)
-            </p>
-            <Button>View Receipt</Button>
+          {/* Receipt List */}
+          <div>
+            {filteredReceipts.length > 0 ? (
+              <ul>
+                {filteredReceipts.map((receipt, index) => (
+                  <li
+                    key={index}
+                    className="border rounded-md p-4 mb-2 flex justify-between items-center"
+                  >
+                    <div>
+                      <p>
+                        <strong>Client Name:</strong> {receipt.clientName}
+                      </p>
+                      <p>
+                        <strong>Date:</strong> {receipt.date}
+                      </p>
+                      {/* Display other receipt details as needed */}
+                    </div>
+                    <Button onClick={() => console.log('View Receipt Clicked')}>
+                      View Receipt
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No receipts found.</p>
+            )}
           </div>
         </CardContent>
       </Card>

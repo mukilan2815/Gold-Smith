@@ -1,7 +1,7 @@
 'use client';
 
 import Layout from '@/components/Layout';
-import {useSearchParams} from 'next/navigation';
+import {useSearchParams, useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -11,6 +11,7 @@ import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {cn} from '@/lib/utils';
 import {format} from 'date-fns';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {useToast} from '@/hooks/use-toast';
 
 export default function ReceiptDetailsPage() {
   return (
@@ -40,6 +41,8 @@ function ReceiptDetailsContent() {
       stoneAmt: 0,
     },
   ]);
+  const {toast} = useToast();
+  const router = useRouter();
 
   const handleAddItem = () => {
     setItems([
@@ -74,6 +77,78 @@ function ReceiptDetailsContent() {
     return items.reduce((acc, item) => acc + Number(item[field]), 0);
   };
 
+  const handleCreateReceipt = () => {
+    // Basic validation
+    if (!date) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please select a date.',
+      });
+      return;
+    }
+
+    if (!metal) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please select a metal type.',
+      });
+      return;
+    }
+
+    if (!weight || !weightUnit) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please enter the weight and select a unit.',
+      });
+      return;
+    }
+
+    if (items.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please add at least one item to the receipt.',
+      });
+      return;
+    }
+
+    // Create receipt object
+    const receipt = {
+      clientName: clientName,
+      date: date.toISOString(), // Store date as ISO string
+      metal: metal,
+      weight: weight,
+      weightUnit: weightUnit,
+      items: items,
+      totalGrossWt: calculateTotal('grossWt'),
+      totalStoneWt: calculateTotal('stoneWt'),
+      totalNetWt: calculateTotal('netWt'),
+      totalFinalWt: calculateTotal('finalWt'),
+      totalStoneAmt: calculateTotal('stoneAmt'),
+    };
+
+    // Retrieve existing receipts from localStorage
+    const existingReceipts = localStorage.getItem('receipts');
+    let receipts = existingReceipts ? JSON.parse(existingReceipts) : [];
+
+    // Add the new receipt to the array
+    receipts.push(receipt);
+
+    // Save the updated receipts array back to localStorage
+    localStorage.setItem('receipts', JSON.stringify(receipts));
+
+    toast({
+      title: 'Receipt Created!',
+      description: 'The receipt has been saved successfully.',
+    });
+
+    // Redirect to bill page
+    router.push('/bill');
+  };
+
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-8">
       <Card className="w-full max-w-4xl">
@@ -98,6 +173,7 @@ function ReceiptDetailsContent() {
                 <Calendar
                   mode="single"
                   selected={date}
+                  onSelect={setDate} // Update the date state
                   className="rounded-md border"
                 />
               </PopoverContent>
@@ -175,7 +251,7 @@ function ReceiptDetailsContent() {
                         type="number"
                         value={item.grossWt}
                         onChange={(e) =>
-                          handleInputChange(index, 'grossWt', parseFloat(e.target.value))
+                          handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
                       />
                     </td>
@@ -184,7 +260,7 @@ function ReceiptDetailsContent() {
                         type="number"
                         value={item.stoneWt}
                         onChange={(e) =>
-                          handleInputChange(index, 'stoneWt', parseFloat(e.target.value))
+                          handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
                       />
                     </td>
@@ -197,7 +273,7 @@ function ReceiptDetailsContent() {
                           handleInputChange(
                             index,
                             'meltingTouch',
-                            parseFloat(e.target.value)
+                            parseFloat(e.target.value) || 0
                           )
                         }
                       />
@@ -208,7 +284,7 @@ function ReceiptDetailsContent() {
                         type="number"
                         value={item.stoneAmt}
                         onChange={(e) =>
-                          handleInputChange(index, 'stoneAmt', parseFloat(e.target.value))
+                          handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
                       />
                     </td>
@@ -281,7 +357,7 @@ function ReceiptDetailsContent() {
             </div>
           </div>
 
-          <Button>Create Receipt</Button>
+          <Button onClick={handleCreateReceipt}>Create Receipt</Button>
         </CardContent>
       </Card>
     </div>
