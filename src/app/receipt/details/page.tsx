@@ -2,7 +2,7 @@
 
 import Layout from '@/components/Layout';
 import {useSearchParams, useRouter} from 'next/navigation';
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useRef} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
@@ -12,6 +12,8 @@ import {cn} from '@/lib/utils';
 import {format} from 'date-fns';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {useToast} from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function ReceiptDetailsPage() {
   return (
@@ -25,6 +27,7 @@ function ReceiptDetailsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const {toast} = useToast();
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   // Extract receipt details from search parameters
   const clientName = searchParams.get('clientName') || '[Client Name]';
@@ -71,9 +74,17 @@ function ReceiptDetailsContent() {
     newItems[index][field] = value;
 
     // Recalculate Net Weight and Final Weight
-    newItems[index].netWt = newItems[index].grossWt - newItems[index].stoneWt;
-    newItems[index].finalWt =
-      newItems[index].netWt * (newItems[index].meltingTouch / 100);
+    if (typeof newItems[index].grossWt === 'number' && typeof newItems[index].stoneWt === 'number') {
+      newItems[index].netWt = newItems[index].grossWt - newItems[index].stoneWt;
+    } else {
+      newItems[index].netWt = 0;
+    }
+
+    if (typeof newItems[index].netWt === 'number' && typeof newItems[index].meltingTouch === 'number') {
+      newItems[index].finalWt = newItems[index].netWt * (newItems[index].meltingTouch / 100);
+    } else {
+      newItems[index].finalWt = 0;
+    }
 
     setItems(newItems);
   };
@@ -152,6 +163,58 @@ function ReceiptDetailsContent() {
 
     // Redirect to bill page
     router.push('/bill');
+  };
+
+  const downloadReceipt = () => {
+    if (summaryRef.current) {
+      const doc = new jsPDF();
+
+      // Add the summary content to the PDF
+      doc.text(`Name: ${clientName}`, 10, 10);
+      doc.text(`Date: ${date ? format(date, 'PPP') : 'No date selected'}`, 10, 20);
+      doc.text(`Metals: ${metal || 'No metal selected'}`, 10, 30);
+      doc.text(
+        `Weight: ${weight ? `${weight} ${weightUnit || 'Unit not selected'}` : 'Weight not specified'}`,
+        10,
+        40
+      );
+
+      // Prepare table data for items
+      const tableColumn = ['Item Name', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Final (wt)', 'Stone Amt'];
+      const tableRows = items.map((item) => [
+        item.itemName,
+        item.grossWt,
+        item.stoneWt,
+        item.netWt.toFixed(3),
+        item.finalWt.toFixed(3),
+        item.stoneAmt,
+      ]);
+
+      // Add the table to the PDF
+      autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 50,
+        didDrawPage: function (data) {
+          // Add total row
+          doc.setFontSize(10);
+          const totalRowY = data.table.body.length > 0 ? data.table.body[data.table.body.length - 1].y + 10 : 70;
+          doc.text(`Total Gross Wt: ${calculateTotal('grossWt')}`, 10, totalRowY);
+          doc.text(`Total Stone Wt: ${calculateTotal('stoneWt')}`, 60, totalRowY);
+          doc.text(`Total Net Wt: ${calculateTotal('netWt')}`, 110, totalRowY);
+          doc.text(`Total Final Wt: ${calculateTotal('finalWt')}`, 160, totalRowY);
+          doc.text(`Total Stone Amt: ${calculateTotal('stoneAmt')}`, 10, totalRowY + 10);
+        },
+      });
+
+      doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not generate PDF.',
+      });
+    }
   };
 
   return (
@@ -238,7 +301,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="text"
-                        value={item.itemName}
+                        value={item.itemName || ''}
                         onChange={(e) =>
                           handleInputChange(index, 'itemName', e.target.value)
                         }
@@ -247,14 +310,14 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="text"
-                        value={item.tag}
+                        value={item.tag || ''}
                         onChange={(e) => handleInputChange(index, 'tag', e.target.value)}
                       />
                     </td>
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.grossWt}
+                        value={item.grossWt || ''}
                         onChange={(e) =>
                           handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
@@ -263,17 +326,17 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneWt}
+                        value={item.stoneWt || ''}
                         onChange={(e) =>
                           handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
                       />
                     </td>
-                    <td className="p-2 border">{item.netWt.toFixed(3)}</td>
+                    <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.meltingTouch}
+                        value={item.meltingTouch || ''}
                         onChange={(e) =>
                           handleInputChange(
                             index,
@@ -283,11 +346,11 @@ function ReceiptDetailsContent() {
                         }
                       />
                     </td>
-                    <td className="p-2 border">{item.finalWt.toFixed(3)}</td>
+                    <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneAmt}
+                        value={item.stoneAmt || ''}
                         onChange={(e) =>
                           handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
@@ -314,7 +377,7 @@ function ReceiptDetailsContent() {
           </div>
 
           {/* Summary */}
-          <div className="mt-4 p-4 border rounded-md">
+          <div className="mt-4 p-4 border rounded-md" ref={summaryRef}>
             <h3 className="text-xl font-semibold">Summary</h3>
             <p>Name: {clientName}</p>
             <p>Date: {date ? format(date, 'PPP') : 'No date selected'}</p>
@@ -344,8 +407,8 @@ function ReceiptDetailsContent() {
                       <td className="p-2 border">{item.itemName}</td>
                       <td className="p-2 border">{item.grossWt}</td>
                       <td className="p-2 border">{item.stoneWt}</td>
-                      <td className="p-2 border">{item.netWt.toFixed(3)}</td>
-                      <td className="p-2 border">{item.finalWt.toFixed(3)}</td>
+                      <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
+                      <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
                       <td className="p-2 border">{item.stoneAmt}</td>
                     </tr>
                   ))}
@@ -363,6 +426,9 @@ function ReceiptDetailsContent() {
           </div>
 
           <Button onClick={handleCreateReceipt}>Create Receipt</Button>
+          <Button variant="secondary" onClick={downloadReceipt}>
+            Download Receipt
+          </Button>
         </CardContent>
       </Card>
     </div>
