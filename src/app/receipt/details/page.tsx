@@ -171,8 +171,8 @@ function ReceiptDetailsContent() {
     // Define colors
     const primaryColor = '#FFD700'; // Gold
     const secondaryColor = '#FFFDD0'; // Cream
-    const textColor = '#000000';     // Black
-    const accentColor = '#008080';   // Teal
+    const textColor = '#000000'; // Black
+    const accentColor = '#008080'; // Teal
 
     // Add background color
     doc.setFillColor(secondaryColor);
@@ -181,11 +181,15 @@ function ReceiptDetailsContent() {
     // Set text color
     doc.setTextColor(textColor);
 
-    // Add the summary content to the PDF
+    // Title
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const title = 'Goldsmith Receipt';
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(primaryColor); // Gold color for the title
-    doc.text(`Goldsmith Receipt`, 10, 10);
+    doc.setTextColor(primaryColor);
+    const titleWidth = doc.getTextWidth(title);
+    const titleX = (pageWidth - titleWidth) / 2;
+    doc.text(title, titleX, 10);
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
@@ -243,6 +247,9 @@ function ReceiptDetailsContent() {
       alternateRowStyles: {
         fillColor: secondaryColor,
       },
+      tableLineColor: textColor,  // Add this
+      tableLineWidth: 0.2,
+      startY: 60,
     };
 
     // Add the table to the PDF
@@ -251,6 +258,7 @@ function ReceiptDetailsContent() {
       body: tableRows,
       startY: 60,
       styles: tableStyle,
+      margin: { horizontal: 10 },
     });
 
     doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
