@@ -9,7 +9,6 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
-  Settings,
   User,
 } from 'lucide-react';
 import {useRouter} from 'next/navigation';

@@ -1,3 +1,4 @@
+'use client';
 
 import Layout from '@/components/Layout';
 
@@ -6,8 +7,6 @@ export default function SignupPage() {
     <SignupContent />
   );
 }
-
-'use client';
 
 import {useState} from 'react';
 import {useRouter} from 'next/navigation';
