@@ -1,5 +1,13 @@
+'use client';
 
 import Layout from '@/components/Layout';
+
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Textarea} from '@/components/ui/textarea';
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
+import {useToast} from '@/hooks/use-toast';
 
 export default function NewClientPage() {
   return (
@@ -8,15 +16,6 @@ export default function NewClientPage() {
     </Layout>
   );
 }
-
-'use client';
-
-import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Textarea} from '@/components/ui/textarea';
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
-import {useToast} from '@/hooks/use-toast';
 
 function NewClientContent() {
   const [shopName, setShopName] = useState('');
@@ -83,4 +82,3 @@ function NewClientContent() {
   );
 }
 
-    
