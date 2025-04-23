@@ -3,9 +3,7 @@
 import Layout from '@/components/Layout';
 
 export default function SignupPage() {
-  return (
-    <SignupContent />
-  );
+  return <SignupContent />;
 }
 
 import {useState} from 'react';
@@ -37,6 +35,7 @@ function SignupContent() {
     }
 
     // Basic signup logic (replace with Firebase Authentication and Firestore)
+    localStorage.setItem(`password-${userId}`, password);
     toast({
       title: 'Signup Successful!',
       description: 'Redirecting to login page...',
@@ -94,5 +93,3 @@ function SignupContent() {
     </div>
   );
 }
-
-    

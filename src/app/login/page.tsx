@@ -3,9 +3,7 @@
 import Layout from '@/components/Layout';
 
 export default function LoginPage() {
-  return (
-    <LoginContent />
-  );
+  return <LoginContent />;
 }
 
 import {useState} from 'react';
@@ -23,7 +21,9 @@ function LoginContent() {
 
   const handleLogin = async () => {
     // Basic login logic (replace with Firebase Authentication)
-    if (userId === 'test' && password === 'password') {
+    const storedPassword = localStorage.getItem(`password-${userId}`);
+
+    if (storedPassword && password === storedPassword) {
       localStorage.setItem('isLoggedIn', 'true');
       toast({
         title: 'Login Successful!',
@@ -73,5 +73,3 @@ function LoginContent() {
     </div>
   );
 }
-
-    
