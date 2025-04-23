@@ -12,6 +12,14 @@ import {cn} from '@/lib/utils';
 import {format} from 'date-fns';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 
+export default function ReceiptDetailsPage() {
+  return (
+    <Layout>
+      <ReceiptDetailsContent />
+    </Layout>
+  );
+}
+
 function ReceiptDetailsContent() {
   const searchParams = useSearchParams();
   const clientName = searchParams.get('clientName') || '[Client Name]';
@@ -90,7 +98,6 @@ function ReceiptDetailsContent() {
                 <Calendar
                   mode="single"
                   selected={date}
-                  onSelect={setDate}
                   className="rounded-md border"
                 />
               </PopoverContent>
