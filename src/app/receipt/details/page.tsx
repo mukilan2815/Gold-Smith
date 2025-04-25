@@ -206,7 +206,7 @@ function ReceiptDetailsContent() {
     const title = 'Goldsmith Receipt';
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(primaryColor);
+    doc.setTextColor(textColor);  // Title color in Black
     const titleWidth = doc.getTextWidth(title);
     const titleX = (pageWidth - titleWidth) / 2;
     doc.text(title, titleX, 10);
@@ -255,20 +255,24 @@ function ReceiptDetailsContent() {
     // Define table style
     const tableStyle = {
       headStyles: {
-        fillColor: accentColor, // Teal color for header
-        textColor: secondaryColor,
+        fillColor: '#ADD8E6', // Light blue for header
+        textColor: textColor,
         fontStyle: 'bold',
         fontSize: 12,
+        lineWidth: 0.1,
+        lineColor: textColor,
       },
       bodyStyles: {
         textColor: textColor,
         fontSize: 10,
+        lineWidth: 0.1,
+        lineColor: textColor,
       },
       alternateRowStyles: {
-        fillColor: secondaryColor,
+        fillColor: '#F0F8FF', // AliceBlue for alternate rows
       },
-      tableLineColor: textColor,  // Add this
-      tableLineWidth: 0.2,
+      tableLineColor: textColor,
+      tableLineWidth: 0.1,
       startY: 60,
       margin: { horizontal: 10 },
     };
@@ -283,6 +287,8 @@ function ReceiptDetailsContent() {
 
     doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
   };
+
+  const isNewReceipt = !searchParams.get('date');
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-8">
@@ -501,8 +507,8 @@ function ReceiptDetailsContent() {
             </div>
           </div>
 
-          {isEditMode ? (
-            <Button onClick={handleSaveReceipt}>Save Receipt</Button>
+          {isNewReceipt ? (
+            <Button onClick={handleSaveReceipt}>Create Receipt</Button>
           ) : (
             <div className="flex gap-2">
               <Button onClick={handleEditReceipt}>Edit Receipt</Button>
