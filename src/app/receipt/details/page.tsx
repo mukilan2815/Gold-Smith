@@ -63,12 +63,12 @@ function ReceiptDetailsContent() {
         sNo: items.length + 1,
         itemName: '',
         tag: '',
-        grossWt: 0,
-        stoneWt: 0,
-        netWt: 0,
-        meltingTouch: 0,
-        finalWt: 0,
-        stoneAmt: 0,
+        grossWt: '',
+        stoneWt: '',
+        netWt: '',
+        meltingTouch: '',
+        finalWt: '',
+        stoneAmt: '',
       },
     ]);
   };
@@ -78,23 +78,26 @@ function ReceiptDetailsContent() {
     newItems[index][field] = value;
 
     // Recalculate Net Weight and Final Weight
-    if (typeof newItems[index].grossWt === 'number' && typeof newItems[index].stoneWt === 'number') {
-      newItems[index].netWt = newItems[index].grossWt - newItems[index].stoneWt;
+    if (newItems[index].grossWt && newItems[index].stoneWt) {
+      newItems[index].netWt = (Number(newItems[index].grossWt) - Number(newItems[index].stoneWt)).toFixed(3);
     } else {
-      newItems[index].netWt = 0;
+      newItems[index].netWt = '';
     }
 
-    if (typeof newItems[index].netWt === 'number' && typeof newItems[index].meltingTouch === 'number') {
-      newItems[index].finalWt = newItems[index].netWt * (newItems[index].meltingTouch / 100);
+    if (newItems[index].netWt && newItems[index].meltingTouch) {
+      newItems[index].finalWt = (Number(newItems[index].netWt) * (Number(newItems[index].meltingTouch) / 100)).toFixed(3);
     } else {
-      newItems[index].finalWt = 0;
+      newItems[index].finalWt = '';
     }
 
     setItems(newItems);
   };
 
   const calculateTotal = (field: string) => {
-    return items.reduce((acc, item) => acc + Number(item[field]), 0);
+    return items.reduce((acc, item) => {
+      const value = Number(item[field]);
+      return isNaN(value) ? acc : acc + value;
+    }, 0);
   };
 
   const handleEditReceipt = () => {
@@ -230,8 +233,8 @@ function ReceiptDetailsContent() {
       item.itemName,
       item.grossWt,
       item.stoneWt,
-      item.netWt?.toFixed(3) || '0.000',
-      item.finalWt?.toFixed(3) || '0.000',
+      item.netWt || '0.000',
+      item.finalWt || '0.000',
       item.stoneAmt,
     ]);
 
@@ -402,9 +405,9 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.grossWt !== null ? item.grossWt : ''}
+                        value={item.grossWt || ''}
                         onChange={(e) =>
-                          handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
+                          handleInputChange(index, 'grossWt', e.target.value)
                         }
                         disabled={!isEditMode && !isNewReceipt}
                       />
@@ -412,35 +415,35 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneWt !== null ? item.stoneWt : ''}
+                        value={item.stoneWt || ''}
                         onChange={(e) =>
-                          handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
+                          handleInputChange(index, 'stoneWt', e.target.value)
                         }
                         disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
-                    <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
+                    <td className="p-2 border">{item.netWt || '0.000'}</td>
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.meltingTouch !== null ? item.meltingTouch : ''}
+                        value={item.meltingTouch || ''}
                         onChange={(e) =>
                           handleInputChange(
                             index,
                             'meltingTouch',
-                            parseFloat(e.target.value) || 0
+                            e.target.value
                           )
                         }
                         disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
-                    <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
+                    <td className="p-2 border">{item.finalWt || '0.000'}</td>
                     <td className="p-2 border">
                       <Input
                         type="number"
-                        value={item.stoneAmt !== null ? item.stoneAmt : ''}
+                        value={item.stoneAmt || ''}
                         onChange={(e) =>
-                          handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
+                          handleInputChange(index, 'stoneAmt', e.target.value)
                         }
                         disabled={!isEditMode && !isNewReceipt}
                       />
@@ -496,8 +499,8 @@ function ReceiptDetailsContent() {
                       <td className="p-2 border">{item.itemName}</td>
                       <td className="p-2 border">{item.grossWt}</td>
                       <td className="p-2 border">{item.stoneWt}</td>
-                      <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
-                      <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
+                      <td className="p-2 border">{item.netWt || '0.000'}</td>
+                      <td className="p-2 border">{item.finalWt || '0.000'}</td>
                       <td className="p-2 border">{item.stoneAmt}</td>
                     </tr>
                   ))}
