@@ -337,9 +337,8 @@ function ReceiptDetailsContent() {
                 placeholder="Weight"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
-                disabled={!isEditMode}
               />
-              <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}>
+              <Select onValueChange={setWeightUnit} value={weightUnit}>
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
@@ -379,7 +378,6 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'itemName', e.target.value)
                         }
-                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -387,7 +385,6 @@ function ReceiptDetailsContent() {
                         type="text"
                         value={item.tag || ''}
                         onChange={(e) => handleInputChange(index, 'tag', e.target.value)}
-                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -397,7 +394,6 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
-                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -407,7 +403,6 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
-                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
@@ -422,7 +417,6 @@ function ReceiptDetailsContent() {
                             parseFloat(e.target.value) || 0
                           )
                         }
-                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
@@ -433,7 +427,6 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
-                        disabled={!isEditMode}
                       />
                     </td>
                   </tr>
@@ -451,11 +444,9 @@ function ReceiptDetailsContent() {
                 </tr>
               </tbody>
             </table>
-            {isEditMode && (
-              <Button onClick={handleAddItem} className="mt-2">
-                Add Item
-              </Button>
-            )}
+            <Button onClick={handleAddItem} className="mt-2">
+              Add Item
+            </Button>
           </div>
 
           {/* Summary */}
