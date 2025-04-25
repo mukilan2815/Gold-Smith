@@ -7,6 +7,17 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {useRouter} from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function BillPage() {
   return (
@@ -44,6 +55,22 @@ function BillContent() {
         receipt.items
       )}`
     );
+  };
+
+  const handleDeleteReceipt = (receipt: any) => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this receipt permanently?'
+    );
+
+    if (confirmed) {
+      // Delete receipt from localStorage
+      const updatedReceipts = receipts.filter(
+        (r) => r.date !== receipt.date || r.clientName !== receipt.clientName
+      );
+      localStorage.setItem('receipts', JSON.stringify(updatedReceipts));
+      setReceipts(updatedReceipts);
+    }
   };
 
   return (
@@ -92,9 +119,35 @@ function BillContent() {
                       </p>
                       {/* Display other receipt details as needed */}
                     </div>
-                    <Button onClick={() => handleViewReceipt(receipt)}>
-                      View Receipt
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleViewReceipt(receipt)}>
+                        View Receipt
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive">Delete</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Are you absolutely sure?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will delete
+                              the receipt permanently from our servers.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteReceipt(receipt)}
+                            >
+                              Continue
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </li>
                 ))}
               </ul>
