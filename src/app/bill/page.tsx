@@ -149,7 +149,7 @@ function BillContent() {
                         <strong>Client Name:</strong> {receipt.clientName}
                       </p>
                       <p>
-                        <strong>Date:</strong> {receipt.date}
+                        <strong>Date:</strong> {format(parseISO(receipt.date), 'PPP')}
                       </p>
                       {/* Display other receipt details as needed */}
                     </div>
