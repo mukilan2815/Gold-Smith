@@ -306,6 +306,7 @@ function ReceiptDetailsContent() {
                     'w-[200px] justify-start text-left font-normal',
                     !date && 'text-muted-foreground'
                   )}
+                  disabled={!isEditMode && !isNewReceipt}
                 >
                   {date ? format(date, 'PPP') : <span>Pick a date</span>}
                 </Button>
@@ -320,7 +321,11 @@ function ReceiptDetailsContent() {
               </PopoverContent>
             </Popover>
 
-            <Select onValueChange={setMetal} value={metal}>
+            <Select
+              onValueChange={setMetal}
+              value={metal}
+              disabled={!isEditMode && !isNewReceipt}
+            >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select Metal" />
               </SelectTrigger>
@@ -337,8 +342,13 @@ function ReceiptDetailsContent() {
                 placeholder="Weight"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
+                disabled={!isEditMode && !isNewReceipt}
               />
-              <Select onValueChange={setWeightUnit} value={weightUnit}>
+              <Select
+                onValueChange={setWeightUnit}
+                value={weightUnit}
+                disabled={!isEditMode && !isNewReceipt}
+              >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
@@ -378,6 +388,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'itemName', e.target.value)
                         }
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                     <td className="p-2 border">
@@ -385,6 +396,7 @@ function ReceiptDetailsContent() {
                         type="text"
                         value={item.tag || ''}
                         onChange={(e) => handleInputChange(index, 'tag', e.target.value)}
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                     <td className="p-2 border">
@@ -394,6 +406,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                     <td className="p-2 border">
@@ -403,6 +416,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                     <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
@@ -417,6 +431,7 @@ function ReceiptDetailsContent() {
                             parseFloat(e.target.value) || 0
                           )
                         }
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                     <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
@@ -427,6 +442,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode && !isNewReceipt}
                       />
                     </td>
                   </tr>
@@ -444,7 +460,7 @@ function ReceiptDetailsContent() {
                 </tr>
               </tbody>
             </table>
-            <Button onClick={handleAddItem} className="mt-2">
+            <Button onClick={handleAddItem} className="mt-2" disabled={!isEditMode && !isNewReceipt}>
               Add Item
             </Button>
           </div>
@@ -502,7 +518,11 @@ function ReceiptDetailsContent() {
             <Button onClick={handleSaveReceipt}>Create Receipt</Button>
           ) : (
             <div className="flex gap-2">
-              <Button onClick={handleEditReceipt}>Edit Receipt</Button>
+              {!isEditMode ? (
+                <Button onClick={handleEditReceipt}>Edit Receipt</Button>
+              ) : (
+                <Button onClick={handleSaveReceipt}>Save Receipt</Button>
+              )}
               <Button onClick={downloadReceipt}>Download Receipt</Button>
             </div>
           )}
