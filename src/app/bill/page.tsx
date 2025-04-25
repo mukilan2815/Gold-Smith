@@ -18,6 +18,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {Calendar} from '@/components/ui/calendar';
+import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
+import {cn} from '@/lib/utils';
+import {format} from 'date-fns';
 
 export default function BillPage() {
   return (
@@ -31,6 +35,7 @@ function BillContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [receipts, setReceipts] = useState<any[]>([]);
   const router = useRouter();
 
@@ -43,9 +48,20 @@ function BillContent() {
   }, []);
 
   const filteredReceipts = receipts.filter((receipt) => {
-    return (
-      receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
-    );
+    const shopNameMatch = receipt.shopName
+      ? receipt.shopName.toLowerCase().includes(shopNameFilter.toLowerCase())
+      : true;
+    const clientNameMatch = receipt.clientName
+      ? receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
+      : true;
+    const phoneNumberMatch = receipt.phoneNumber
+      ? receipt.phoneNumber.includes(phoneNumberFilter)
+      : true;
+    const dateMatch = dateFilter
+      ? format(dateFilter, 'yyyy-MM-dd') === format(new Date(receipt.date), 'yyyy-MM-dd')
+      : true;
+
+    return shopNameMatch && clientNameMatch && phoneNumberMatch && dateMatch;
   });
 
   const handleViewReceipt = (receipt: any) => {
@@ -75,7 +91,7 @@ function BillContent() {
           <CardTitle className="text-2xl">Receipts</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Input
               type="text"
               placeholder="Shop Name"
@@ -94,6 +110,27 @@ function BillContent() {
               value={phoneNumberFilter}
               onChange={(e) => setPhoneNumberFilter(e.target.value)}
             />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={'outline'}
+                  className={cn(
+                    'w-[200px] justify-start text-left font-normal',
+                    !dateFilter && 'text-muted-foreground'
+                  )}
+                >
+                  {dateFilter ? format(dateFilter, 'PPP') : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dateFilter}
+                  onSelect={setDateFilter}
+                  className="rounded-md border"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Receipt List */}
