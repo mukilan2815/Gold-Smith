@@ -57,20 +57,15 @@ function BillContent() {
     );
   };
 
-  const handleDeleteReceipt = (receipt: any) => {
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      'Are you sure you want to delete this receipt permanently?'
+  const handleDeleteReceipt = (receiptToDelete: any) => {
+    // Delete receipt from localStorage
+    const updatedReceipts = receipts.filter(
+      (r) =>
+        r.date !== receiptToDelete.date ||
+        r.clientName !== receiptToDelete.clientName
     );
-
-    if (confirmed) {
-      // Delete receipt from localStorage
-      const updatedReceipts = receipts.filter(
-        (r) => r.date !== receipt.date || r.clientName !== receipt.clientName
-      );
-      localStorage.setItem('receipts', JSON.stringify(updatedReceipts));
-      setReceipts(updatedReceipts);
-    }
+    localStorage.setItem('receipts', JSON.stringify(updatedReceipts));
+    setReceipts(updatedReceipts);
   };
 
   return (
