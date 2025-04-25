@@ -30,14 +30,15 @@ function ReceiptDetailsContent() {
   const summaryRef = useRef<HTMLDivElement>(null);
 
   // Extract receipt details from search parameters
-  const clientName = searchParams.get('clientName') || '[Client Name]';
+  const clientNameParam = searchParams.get('clientName') || '[Client Name]';
   const dateParam = searchParams.get('date');
   const metalParam = searchParams.get('metal');
   const weightParam = searchParams.get('weight');
   const weightUnitParam = searchParams.get('weightUnit');
   const itemsParam = searchParams.get('items');
 
-  // Parse date, weight, and items from URL parameters
+  // Initialize state with values from URL parameters or defaults
+  const [clientName, setClientName] = useState(clientNameParam);
   const [date, setDate] = useState<Date | undefined>(
     dateParam ? parseISO(dateParam) : undefined
   );
@@ -45,6 +46,9 @@ function ReceiptDetailsContent() {
   const [weight, setWeight] = useState(weightParam || '');
   const [weightUnit, setWeightUnit] = useState(weightUnitParam || '');
   const [items, setItems] = useState<any[]>(itemsParam ? JSON.parse(itemsParam) : []);
+
+  // New state for managing edit mode
+  const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     if (dateParam) {
@@ -93,7 +97,11 @@ function ReceiptDetailsContent() {
     return items.reduce((acc, item) => acc + Number(item[field]), 0);
   };
 
-  const handleCreateReceipt = () => {
+  const handleEditReceipt = () => {
+    setIsEditMode(true);
+  };
+
+  const handleSaveReceipt = () => {
     // Basic validation
     if (!date) {
       toast({
@@ -132,7 +140,7 @@ function ReceiptDetailsContent() {
     }
 
     // Create receipt object
-    const receipt = {
+    const updatedReceipt = {
       clientName: clientName,
       date: date.toISOString(), // Store date as ISO string
       metal: metal,
@@ -150,17 +158,29 @@ function ReceiptDetailsContent() {
     const existingReceipts = localStorage.getItem('receipts');
     let receipts = existingReceipts ? JSON.parse(existingReceipts) : [];
 
-    // Add the new receipt to the array
-    receipts.push(receipt);
+    // Find the index of the receipt to update (matching clientName and date)
+    const receiptIndex = receipts.findIndex(
+      (receipt) =>
+        receipt.clientName === clientNameParam && receipt.date === dateParam
+    );
+
+    if (receiptIndex !== -1) {
+      // Update the receipt in the array
+      receipts[receiptIndex] = updatedReceipt;
+    } else {
+      // If receipt doesn't exist, add the new receipt to the array
+      receipts.push(updatedReceipt);
+    }
 
     // Save the updated receipts array back to localStorage
     localStorage.setItem('receipts', JSON.stringify(receipts));
 
     toast({
-      title: 'Receipt Created!',
+      title: 'Receipt Saved!',
       description: 'The receipt has been saved successfully.',
     });
 
+    setIsEditMode(false);
     // Redirect to bill page
     router.push('/bill');
   };
@@ -311,8 +331,9 @@ function ReceiptDetailsContent() {
                 placeholder="Weight"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
+                disabled={!isEditMode}
               />
-              <Select onValueChange={setWeightUnit} value={weightUnit}>
+              <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}>
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Unit" />
                 </SelectTrigger>
@@ -352,6 +373,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'itemName', e.target.value)
                         }
+                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -359,6 +381,7 @@ function ReceiptDetailsContent() {
                         type="text"
                         value={item.tag || ''}
                         onChange={(e) => handleInputChange(index, 'tag', e.target.value)}
+                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -368,6 +391,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'grossWt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">
@@ -377,6 +401,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneWt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">{item.netWt?.toFixed(3) || '0.000'}</td>
@@ -391,6 +416,7 @@ function ReceiptDetailsContent() {
                             parseFloat(e.target.value) || 0
                           )
                         }
+                        disabled={!isEditMode}
                       />
                     </td>
                     <td className="p-2 border">{item.finalWt?.toFixed(3) || '0.000'}</td>
@@ -401,6 +427,7 @@ function ReceiptDetailsContent() {
                         onChange={(e) =>
                           handleInputChange(index, 'stoneAmt', parseFloat(e.target.value) || 0)
                         }
+                        disabled={!isEditMode}
                       />
                     </td>
                   </tr>
@@ -418,9 +445,11 @@ function ReceiptDetailsContent() {
                 </tr>
               </tbody>
             </table>
-            <Button onClick={handleAddItem} className="mt-2">
-              Add Item
-            </Button>
+            {isEditMode && (
+              <Button onClick={handleAddItem} className="mt-2">
+                Add Item
+              </Button>
+            )}
           </div>
 
           {/* Summary */}
@@ -472,7 +501,14 @@ function ReceiptDetailsContent() {
             </div>
           </div>
 
-          <Button onClick={handleCreateReceipt}>Create Receipt</Button>
+          {isEditMode ? (
+            <Button onClick={handleSaveReceipt}>Save Receipt</Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button onClick={handleEditReceipt}>Edit Receipt</Button>
+              <Button onClick={downloadReceipt}>Download Receipt</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
