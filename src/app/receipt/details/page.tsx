@@ -9,7 +9,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/c
 import {Calendar} from '@/components/ui/calendar';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {cn} from '@/lib/utils';
-import {format} from 'date-fns';
+import {format, parseISO} from 'date-fns';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {useToast} from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
@@ -39,7 +39,7 @@ function ReceiptDetailsContent() {
 
   // Parse date, weight, and items from URL parameters
   const [date, setDate] = useState<Date | undefined>(
-    dateParam ? new Date(dateParam) : undefined
+    dateParam ? parseISO(dateParam) : undefined
   );
   const [metal, setMetal] = useState(metalParam || '');
   const [weight, setWeight] = useState(weightParam || '');
@@ -48,7 +48,7 @@ function ReceiptDetailsContent() {
 
   useEffect(() => {
     if (dateParam) {
-      setDate(new Date(dateParam));
+      setDate(parseISO(dateParam));
     }
   }, [dateParam]);
 
@@ -250,6 +250,7 @@ function ReceiptDetailsContent() {
       tableLineColor: textColor,  // Add this
       tableLineWidth: 0.2,
       startY: 60,
+      margin: { horizontal: 10 },
     };
 
     // Add the table to the PDF
@@ -258,7 +259,6 @@ function ReceiptDetailsContent() {
       body: tableRows,
       startY: 60,
       styles: tableStyle,
-      margin: { horizontal: 10 },
     });
 
     doc.save(`receipt_${clientName}_${format(date || new Date(), 'yyyyMMdd')}.pdf`);
@@ -473,9 +473,6 @@ function ReceiptDetailsContent() {
           </div>
 
           <Button onClick={handleCreateReceipt}>Create Receipt</Button>
-          <Button variant="secondary" onClick={downloadReceipt}>
-            Download Receipt
-          </Button>
         </CardContent>
       </Card>
     </div>

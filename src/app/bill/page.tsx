@@ -21,7 +21,7 @@ import {
 import {Calendar} from '@/components/ui/calendar';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {cn} from '@/lib/utils';
-import {format} from 'date-fns';
+import {format, parseISO} from 'date-fns';
 
 export default function BillPage() {
   return (
@@ -57,8 +57,10 @@ function BillContent() {
     const phoneNumberMatch = receipt.phoneNumber
       ? receipt.phoneNumber.includes(phoneNumberFilter)
       : true;
+
     const dateMatch = dateFilter
-      ? format(dateFilter, 'yyyy-MM-dd') === format(new Date(receipt.date), 'yyyy-MM-dd')
+      ? format(dateFilter, 'yyyy-MM-dd') ===
+        format(parseISO(receipt.date), 'yyyy-MM-dd')
       : true;
 
     return shopNameMatch && clientNameMatch && phoneNumberMatch && dateMatch;
