@@ -32,6 +32,11 @@ export default function SidebarContentComponent() {
     setOpen(false);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('isLoggedIn');
+    router.push('/login');
+  };
+
   return (
     <SidebarContent>
       <SidebarMenu>
@@ -92,7 +97,7 @@ export default function SidebarContentComponent() {
       <SidebarGroup>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton>
+            <SidebarMenuButton onClick={handleLogout}>
               <LogOut />
               <span>Logout</span>
             </SidebarMenuButton>
@@ -102,3 +107,4 @@ export default function SidebarContentComponent() {
     </SidebarContent>
   );
 }
+
