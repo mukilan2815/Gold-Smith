@@ -6,6 +6,17 @@ import {useRouter} from 'next/navigation';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function ReceiptPage() {
   return (
@@ -41,6 +52,17 @@ function ReceiptContent() {
   const handleClientSelection = (client: any) => {
     // Navigate to Receipt Page 2 with client details
     router.push(`/receipt/details?clientName=${client.clientName}`);
+  };
+
+  const handleDeleteClient = (clientToDelete: any) => {
+    // Delete client from localStorage
+    const updatedClients = clients.filter(
+      (c) =>
+        c.clientName !== clientToDelete.clientName ||
+        c.phoneNumber !== clientToDelete.phoneNumber
+    );
+    localStorage.setItem('clients', JSON.stringify(updatedClients));
+    setClients(updatedClients);
   };
 
   return (
@@ -94,9 +116,35 @@ function ReceiptContent() {
                         <strong>Address:</strong> {client.address}
                       </p>
                     </div>
-                    <Button onClick={() => handleClientSelection(client)}>
-                      Select Client
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleClientSelection(client)}>
+                        Select Client
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive">Delete</Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Are you absolutely sure?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will delete
+                              the client permanently.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteClient(client)}
+                            >
+                              Continue
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </li>
                 ))}
               </ul>
