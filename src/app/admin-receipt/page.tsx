@@ -1,3 +1,4 @@
+
 'use client';
 
 import Layout from '@/components/Layout';
@@ -7,14 +8,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
-// Define the Client interface based on localStorage structure
+// Define the Client interface matching Firestore structure
 interface Client {
-  id: string; // Assuming clients have a unique ID when stored
+  id: string; // Firestore document ID
   shopName: string;
   clientName: string;
   phoneNumber: string;
   address: string;
+  // Add any other fields if they exist in your Firestore 'Clients' documents
 }
 
 export default function AdminReceiptPage() {
@@ -32,28 +37,33 @@ function AdminReceiptContent() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Load clients from localStorage on component mount
-    try {
-      const storedClients = localStorage.getItem('clients');
-      if (storedClients) {
-        // Assuming clients are stored as an array, add IDs for navigation key
-        const parsedClients = JSON.parse(storedClients).map((client: any, index: number) => ({
-          ...client,
-          // Generate a simple unique ID based on index if none exists
-          // In a real Firestore scenario, Firestore document ID would be used
-          id: client.id || `${client.clientName}-${client.phoneNumber}-${index}`
-        }));
-        setClients(parsedClients.sort((a: Client, b: Client) => a.clientName.localeCompare(b.clientName))); // Sort initially
+    // Load clients from Firestore on component mount
+    const fetchClients = async () => {
+      setLoading(true);
+      try {
+        const clientsRef = collection(db, 'Clients');
+        // Optionally, order clients (e.g., by clientName)
+        const q = query(clientsRef, orderBy('clientName')); // Order by client name
+        const querySnapshot = await getDocs(q);
+        const fetchedClients: Client[] = [];
+        querySnapshot.forEach((doc) => {
+          // Use doc.id as the client's unique ID
+          fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
+        });
+        setClients(fetchedClients);
+      } catch (error) {
+        console.error("Error fetching clients from Firestore:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error loading clients from localStorage:", error);
-      // Handle error appropriately, maybe show a toast message
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    };
+
+    fetchClients();
+  }, [toast]);
 
   const filteredClients = clients.filter((client) => {
     const shopNameMatch = client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase()) ?? true;
@@ -63,8 +73,7 @@ function AdminReceiptContent() {
   });
 
   const handleClientSelection = (client: Client) => {
-    // Navigate to Admin Receipt Page 2 with client ID
-    // Replace '/admin-receipt/details' with the actual path for page 2
+    // Navigate to Admin Receipt Details page with client ID and Name
     router.push(`/admin-receipt/details?clientId=${client.id}&clientName=${encodeURIComponent(client.clientName)}`);
   };
 
@@ -93,7 +102,7 @@ function AdminReceiptContent() {
               className="rounded-md"
             />
             <Input
-              type="number" // Use number type for phone number consistency
+              type="text" // Changed to text to allow flexible phone number formats
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
               onChange={(e) => setPhoneNumberFilter(e.target.value)}
@@ -109,10 +118,10 @@ function AdminReceiptContent() {
               <ul className="space-y-3">
                 {filteredClients.map((client) => (
                   <li
-                    key={client.id} // Use unique ID as key
+                    key={client.id} // Use Firestore document ID as key
                     className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
                   >
-                    <div className="mb-3 md:mb-0">
+                    <div className="mb-3 md:mb-0 md:flex-1"> {/* Added flex-1 */}
                       <p className="font-semibold text-lg">
                         {client.clientName}
                       </p>
@@ -129,6 +138,7 @@ function AdminReceiptContent() {
                     <Button
                       onClick={() => handleClientSelection(client)}
                       className="mt-2 md:mt-0 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md"
+                      size="sm" // Smaller button
                     >
                       Select Client
                     </Button>
@@ -144,3 +154,4 @@ function AdminReceiptContent() {
     </div>
   );
 }
+

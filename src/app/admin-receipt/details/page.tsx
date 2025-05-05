@@ -1,9 +1,10 @@
+
 'use client';
 
 import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { CalendarIcon, PlusCircle, Trash2 } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -16,38 +17,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 // Import Firestore functions
-import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase'; // Assuming you have a firebase config file
+import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // --- Interfaces ---
 interface GivenItem {
   id: string;
   productName: string;
-  pureWeight: string; // Keep as string for input, parse for calculation
-  purePercent: string; // Keep as string for input, parse for calculation
-  melting: string;     // Keep as string for input, parse for calculation
-  total: number;       // Calculated value
+  pureWeight: string;
+  purePercent: string;
+  melting: string;
+  total: number;
 }
 
 interface ReceivedItem {
   id: string;
   productName: string;
-  finalOrnamentsWt: string; // Keep as string
-  stoneWeight: string;      // Keep as string
-  subTotal: number;         // Calculated
-  makingChargePercent: string; // Keep as string
-  total: number;            // Calculated
+  finalOrnamentsWt: string;
+  stoneWeight: string;
+  subTotal: number;
+  makingChargePercent: string;
+  total: number;
 }
 
+// Firestore Document Structure for AdminReceipts
 interface AdminReceiptData {
+  id?: string; // Firestore document ID (optional on create)
   clientId: string;
   clientName: string;
-  dateGiven: string | null; // Store as ISO string
+  dateGiven: string | null; // Store as ISO string or null
   given: GivenItem[];
-  dateReceived: string | null; // Store as ISO string
-  received: ReceivedItem[];
-  createdAt?: any; // Firestore timestamp
-  updatedAt?: any; // Firestore timestamp
+  dateReceived: string | null; // Store as ISO string or null
+  received: ReceivedItem[] | null; // Allow null if not yet received
+  createdAt?: Timestamp; // Firestore timestamp
+  updatedAt?: Timestamp; // Firestore timestamp
 }
 
 // --- Helper Functions ---
@@ -57,25 +60,23 @@ const calculateGivenTotal = (item: GivenItem): number => {
   const pureWeight = parseFloat(item.pureWeight) || 0;
   const purePercent = parseFloat(item.purePercent) || 0;
   const melting = parseFloat(item.melting) || 0;
-  if (melting === 0) return 0; // Avoid division by zero
-  // Corrected formula: Total = (Pure Weight × Pure %) ÷ Melting
+  if (melting === 0) return 0;
   const total = (pureWeight * purePercent) / melting;
-  return parseFloat(total.toFixed(3)); // Round to 3 decimal places
+  return parseFloat(total.toFixed(3));
 };
 
 const calculateReceivedSubTotal = (item: ReceivedItem): number => {
   const finalOrnamentsWt = parseFloat(item.finalOrnamentsWt) || 0;
   const stoneWeight = parseFloat(item.stoneWeight) || 0;
   const subTotal = finalOrnamentsWt - stoneWeight;
-  return parseFloat(subTotal.toFixed(3)); // Round to 3 decimal places
+  return parseFloat(subTotal.toFixed(3));
 };
 
 const calculateReceivedTotal = (item: ReceivedItem): number => {
   const subTotal = calculateReceivedSubTotal(item);
   const makingChargePercent = parseFloat(item.makingChargePercent) || 0;
-  // Corrected formula: Total = Sub Total × (Making Charge ÷ 100)
   const total = subTotal * (makingChargePercent / 100);
-  return parseFloat(total.toFixed(3)); // Round to 3 decimal places
+  return parseFloat(total.toFixed(3));
 };
 
 // --- Component ---
@@ -93,13 +94,13 @@ function AdminReceiptDetailsContent() {
   const { toast } = useToast();
 
   const clientId = searchParams.get('clientId');
-  const clientName = searchParams.get('clientName') || 'Client'; // Autofilled
+  const clientName = searchParams.get('clientName') || 'Client';
   const receiptId = searchParams.get('receiptId'); // For editing existing receipts
 
   const [dateGiven, setDateGiven] = useState<Date | undefined>(undefined);
   const [dateReceived, setDateReceived] = useState<Date | undefined>(undefined);
-  const [givenItems, setGivenItems] = useState<GivenItem[]>([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]); // Start with one empty row
-  const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]); // Start with one empty row
+  const [givenItems, setGivenItems] = useState<GivenItem[]>([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+  const [receivedItems, setReceivedItems] = useState<ReceivedItem[]>([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
   const [manualGivenTotal, setManualGivenTotal] = useState('');
   const [manualReceivedTotal, setManualReceivedTotal] = useState('');
   const [manualOperation, setManualOperation] = useState<'add' | 'subtract'>('subtract');
@@ -110,7 +111,7 @@ function AdminReceiptDetailsContent() {
   // --- Fetch Existing Data from Firestore ---
   useEffect(() => {
     const fetchReceiptData = async () => {
-      if (clientId && currentReceiptId) { // Only fetch if editing an existing receipt
+      if (clientId && currentReceiptId) {
         setLoading(true);
         try {
           const receiptRef = doc(db, 'AdminReceipts', currentReceiptId);
@@ -118,41 +119,43 @@ function AdminReceiptDetailsContent() {
 
           if (docSnap.exists()) {
             const data = docSnap.data() as AdminReceiptData;
-            setDateGiven(data.dateGiven ? new Date(data.dateGiven) : undefined);
+            setDateGiven(data.dateGiven && isValid(new Date(data.dateGiven)) ? new Date(data.dateGiven) : undefined);
             setGivenItems(data.given && data.given.length > 0 ? data.given : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            setDateReceived(data.dateReceived ? new Date(data.dateReceived) : undefined);
-            // Ensure there's at least one received item row, even if fetched data is empty/null
+            setDateReceived(data.dateReceived && isValid(new Date(data.dateReceived)) ? new Date(data.dateReceived) : undefined);
             setReceivedItems(data.received && data.received.length > 0 ? data.received : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
           } else {
-            console.log("No such document! Creating a new one.");
+            console.warn(`Receipt document ${currentReceiptId} not found. Starting new.`);
             toast({ variant: "default", title: "New Receipt", description: "Creating a new admin receipt." });
             setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
             setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-            setCurrentReceiptId(null); // Reset receipt ID as we are creating new
+            setCurrentReceiptId(null); // Ensure we are creating a new one
           }
         } catch (error) {
           console.error("Error fetching admin receipt from Firestore:", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not load receipt data." });
+          toast({ variant: "destructive", title: "Error", description: "Could not load receipt data. Starting new." });
            setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
            setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-           setCurrentReceiptId(null); // Reset receipt ID on error
+           setCurrentReceiptId(null);
         } finally {
           setLoading(false);
         }
       } else if (clientId) {
-          // Creating a new receipt, initialize with defaults
+          // Creating a new receipt (no receiptId provided)
           setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
           setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+          setDateGiven(undefined);
+          setDateReceived(undefined);
+          setCurrentReceiptId(null); // Explicitly null for new receipt
           setLoading(false);
       } else {
         toast({ variant: "destructive", title: "Error", description: "Client ID is missing." });
-        router.push('/admin-receipt'); // Redirect if no client ID
+        router.push('/admin-receipt');
         setLoading(false);
       }
     };
 
     fetchReceiptData();
-  }, [clientId, currentReceiptId, router, toast]); // Depend on currentReceiptId
+  }, [clientId, receiptId, router, toast]); // Depend on original receiptId from params
 
   // --- Event Handlers ---
    const handleInputChange = <T extends GivenItem | ReceivedItem>(
@@ -170,8 +173,8 @@ function AdminReceiptDetailsContent() {
     } else { // received
       const newItems = [...receivedItems] as ReceivedItem[];
       const item = { ...newItems[index], [field]: value } as ReceivedItem;
-      item.subTotal = calculateReceivedSubTotal(item); // Recalculate Sub Total
-      item.total = calculateReceivedTotal(item);     // Recalculate Total
+      item.subTotal = calculateReceivedSubTotal(item);
+      item.total = calculateReceivedTotal(item);
       newItems[index] = item;
       setReceivedItems(newItems);
     }
@@ -179,10 +182,8 @@ function AdminReceiptDetailsContent() {
 
  const handleAddItem = (type: 'given' | 'received') => {
     if (type === 'given') {
-        // Add new empty 'given' item
         setGivenItems([...givenItems, { id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
     } else { // received
-        // Add new empty 'received' item
         setReceivedItems([...receivedItems, { id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
     }
 };
@@ -206,12 +207,12 @@ function AdminReceiptDetailsContent() {
 
 
   const handleSave = async (saveType: 'given' | 'received') => {
-    if (!clientId) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Client ID is missing.' });
+    if (!clientId || !clientName) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Client information is missing.' });
       return;
     }
 
-    // Filter out rows where all relevant input fields are empty before validation and saving
+    // Filter out rows where all relevant input fields are empty
      const finalGivenItems = givenItems.filter(item =>
         item.productName.trim() !== '' ||
         item.pureWeight.trim() !== '' ||
@@ -226,11 +227,10 @@ function AdminReceiptDetailsContent() {
         item.makingChargePercent.trim() !== ''
     );
 
-
     const hasGivenData = finalGivenItems.length > 0;
     const hasReceivedData = finalReceivedItems.length > 0;
 
-    // Validate date selection based on which tab is being saved AND has data
+    // Validate date based on the tab being saved AND if data exists in that tab
     if (saveType === 'given' && hasGivenData && !dateGiven) {
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a date for the "Given" items.' });
       return;
@@ -240,98 +240,108 @@ function AdminReceiptDetailsContent() {
       return;
     }
 
-    // Ensure at least one tab has data if saving for the first time
+    // Validate that at least one tab has data if creating a new receipt
     if (!currentReceiptId && !hasGivenData && !hasReceivedData) {
         toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for either Given or Received items before saving.' });
         return;
-     }
-    // If saving 'Given' ensure there is data
-    if (saveType === 'given' && !hasGivenData) {
-       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Given" items before saving.' });
+    }
+    // Validate that the current tab being saved has data
+     if (saveType === 'given' && !hasGivenData) {
+       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Given" items before saving this section.' });
        return;
     }
-     // If saving 'Received' ensure there is data
-    if (saveType === 'received' && !hasReceivedData) {
-       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Received" items before saving.' });
+     if (saveType === 'received' && !hasReceivedData) {
+       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Received" items before saving this section.' });
        return;
     }
 
 
     setIsSaving(true);
 
-
-    // Prepare data, including only the relevant part based on saveType for updates
-    // Use the filtered lists (finalGivenItems, finalReceivedItems)
-    const receiptData: Partial<AdminReceiptData> = {
-        clientId, // Always include clientId and name
-        clientName,
-        updatedAt: serverTimestamp(),
+    // Prepare the data object based on Firestore structure
+    const dataToSave: Partial<AdminReceiptData> = {
+      clientId,
+      clientName,
+      updatedAt: serverTimestamp(), // Always update timestamp
     };
 
+    // Include data from the tab being saved
     if (saveType === 'given') {
-        receiptData.dateGiven = dateGiven ? dateGiven.toISOString() : null;
-        receiptData.given = finalGivenItems;
-    }
-
-    if (saveType === 'received') {
-        receiptData.dateReceived = dateReceived ? dateReceived.toISOString() : null;
-        receiptData.received = finalReceivedItems;
+      dataToSave.dateGiven = hasGivenData && dateGiven ? dateGiven.toISOString() : null;
+      dataToSave.given = hasGivenData ? finalGivenItems : []; // Save empty array if cleared
+    } else { // saveType === 'received'
+      dataToSave.dateReceived = hasReceivedData && dateReceived ? dateReceived.toISOString() : null;
+      dataToSave.received = hasReceivedData ? finalReceivedItems : []; // Save empty array if cleared, null if never entered
     }
 
 
     try {
       let docRef;
       if (currentReceiptId) {
-        // Editing existing receipt: Update the document
+        // --- Updating Existing Receipt ---
         docRef = doc(db, 'AdminReceipts', currentReceiptId);
 
-        // Fetch existing data to merge correctly
-         const existingDocSnap = await getDoc(docRef);
-         const existingData = existingDocSnap.exists() ? existingDocSnap.data() as AdminReceiptData : null;
+        // Fetch existing data to merge correctly, preserving the *other* tab's data
+        const existingDocSnap = await getDoc(docRef);
+        if (existingDocSnap.exists()) {
+          const existingData = existingDocSnap.data() as AdminReceiptData;
 
-        // If saving 'received', preserve existing 'given' data if it exists
-        if (saveType === 'received' && existingData?.given && !receiptData.given) {
-             receiptData.given = existingData.given;
-             receiptData.dateGiven = existingData.dateGiven; // Preserve date too
+          // If saving 'received', preserve existing 'given' data unless explicitly saving 'given' now
+          if (saveType === 'received' && !dataToSave.given && existingData.given !== undefined) {
+            dataToSave.given = existingData.given;
+            dataToSave.dateGiven = existingData.dateGiven;
+          }
+          // If saving 'given', preserve existing 'received' data unless explicitly saving 'received' now
+          if (saveType === 'given' && !dataToSave.received && existingData.received !== undefined) {
+            dataToSave.received = existingData.received;
+            dataToSave.dateReceived = existingData.dateReceived;
+          }
+        } else {
+          // If the doc doesn't exist unexpectedly, treat as creation
+          console.warn(`Document ${currentReceiptId} not found during update, will create new.`);
+          currentReceiptId = null; // Force creation logic below
+          dataToSave.createdAt = serverTimestamp();
         }
-        // If saving 'given', preserve existing 'received' data if it exists
-        if (saveType === 'given' && existingData?.received && !receiptData.received) {
-             receiptData.received = existingData.received;
-             receiptData.dateReceived = existingData.dateReceived; // Preserve date too
-        }
-        // If 'received' data is intentionally being cleared (empty list), allow it
-         if (saveType === 'received' && finalReceivedItems.length === 0) {
-             receiptData.received = []; // Explicitly set to empty array
-             receiptData.dateReceived = dateReceived ? dateReceived.toISOString() : null; // Still save the date if picked
-         }
-         // If 'given' data is intentionally being cleared
-         if (saveType === 'given' && finalGivenItems.length === 0) {
-            receiptData.given = [];
-            receiptData.dateGiven = dateGiven ? dateGiven.toISOString() : null;
-         }
 
-
-        await updateDoc(docRef, receiptData);
-        toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
-      } else {
-        // Creating new receipt: Create a new document
-        const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
-        receiptData.createdAt = serverTimestamp(); // Add createdAt timestamp
-        // Initialize the *other* tab's data as null or empty array explicitly
-        if (saveType === 'given') {
-            receiptData.dateReceived = null;
-            receiptData.received = []; // Start other tab empty
-        } else { // saveType === 'received'
-            receiptData.dateGiven = null;
-            receiptData.given = []; // Start other tab empty
+        if (currentReceiptId) { // Check again if it wasn't reset
+           await updateDoc(docRef, dataToSave);
+           toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
         }
-        await setDoc(newReceiptRef, receiptData);
-        setCurrentReceiptId(newReceiptRef.id); // Store the new ID
-        toast({ title: 'Success', description: `Admin receipt ${saveType} data saved.` });
+
       }
-      // Refetch data after saving to ensure UI consistency, especially for totals
-      // Or update local state directly if preferred, but refetch is safer
-      // await fetchReceiptData(); // You might need to adjust fetchReceiptData or call manually
+
+      // --- Creating New Receipt (or if update failed finding doc) ---
+       if (!currentReceiptId) {
+        const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
+        dataToSave.createdAt = serverTimestamp();
+
+        // Initialize the *other* tab's data explicitly
+        if (saveType === 'given') {
+            dataToSave.dateReceived = null; // No received date yet
+            dataToSave.received = null; // No received items yet (use null to indicate not set)
+        } else { // saveType === 'received'
+            dataToSave.dateGiven = null; // No given date yet
+            dataToSave.given = []; // Start given items empty
+            // It's less likely to save Received first, but handle it
+            // If Given data *was* entered but not saved yet, capture it:
+             const currentFinalGivenItems = givenItems.filter(item =>
+                  item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== ''
+             );
+             if (currentFinalGivenItems.length > 0) {
+                dataToSave.given = currentFinalGivenItems;
+                dataToSave.dateGiven = dateGiven ? dateGiven.toISOString() : null;
+             }
+        }
+        await setDoc(newReceiptRef, dataToSave);
+        setCurrentReceiptId(newReceiptRef.id); // Store the new ID for subsequent saves within this session
+        toast({ title: 'Success', description: `Admin receipt ${saveType} data saved.` });
+         // Update URL to include the new receiptId for potential refresh/bookmarking
+         router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName)}&receiptId=${newReceiptRef.id}`, undefined);
+
+      }
+      // --- Post-Save ---
+      // Maybe refetch or update local state if complex interactions are needed.
+      // For now, relying on the next load or navigation to show updated list data.
 
     } catch (error) {
       console.error("Error saving admin receipt to Firestore:", error);
@@ -342,7 +352,6 @@ function AdminReceiptDetailsContent() {
   };
 
   // --- Calculations for Totals ---
-  // Use the filtered lists for accurate totals based on non-empty rows
   const finalGivenItemsForTotal = givenItems.filter(item =>
     item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== ''
   );
@@ -350,12 +359,11 @@ function AdminReceiptDetailsContent() {
     item.productName.trim() !== '' || item.finalOrnamentsWt.trim() !== '' || item.stoneWeight.trim() !== '' || item.makingChargePercent.trim() !== ''
   );
 
-
   const totalGivenPureWeight = finalGivenItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
   const totalGivenTotal = finalGivenItemsForTotal.reduce((sum, item) => sum + item.total, 0);
 
   const totalReceivedFinalOrnamentsWt = finalReceivedItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0);
-  const totalReceivedStoneWeight = finalReceivedItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0); // Added for completeness if needed
+  const totalReceivedStoneWeight = finalReceivedItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0);
   const totalReceivedSubTotal = finalReceivedItemsForTotal.reduce((sum, item) => sum + item.subTotal, 0);
   const totalReceivedTotal = finalReceivedItemsForTotal.reduce((sum, item) => sum + item.total, 0);
 
@@ -391,9 +399,9 @@ function AdminReceiptDetailsContent() {
           <CardHeader>
             <CardTitle className="text-2xl">Admin Receipt for: {clientName}</CardTitle>
             <CardDescription>Manage given and received items for this client.</CardDescription>
+            {currentReceiptId && <p className="text-xs text-muted-foreground">Receipt ID: {currentReceiptId}</p>}
           </CardHeader>
           <CardContent>
-             {/* Tabs Implementation */}
              <Tabs defaultValue="given" className="w-full">
                <TabsList className="grid w-full grid-cols-2 mb-4">
                  <TabsTrigger value="given">Given Items</TabsTrigger>
@@ -407,7 +415,6 @@ function AdminReceiptDetailsContent() {
                      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                         <div className="flex items-center gap-4">
                            <CardTitle>Given Details</CardTitle>
-                           {/* Display Client Name (autofilled) */}
                            <span className="text-sm text-muted-foreground">(Client: {clientName})</span>
                         </div>
                          <Popover>
@@ -415,11 +422,11 @@ function AdminReceiptDetailsContent() {
                              <Button
                                variant={'outline'}
                                className={cn(
-                                 'w-full md:w-[240px] justify-start text-left font-normal', // Adjusted width
+                                 'w-full md:w-[240px] justify-start text-left font-normal',
                                  !dateGiven && 'text-muted-foreground'
                                )}
                              >
-                               <CalendarIcon className="mr-2 h-4 w-4" /> {/* Added Icon */}
+                               <CalendarIcon className="mr-2 h-4 w-4" />
                                {dateGiven ? format(dateGiven, 'PPP') : <span>Pick Given Date</span>}
                              </Button>
                            </PopoverTrigger>
@@ -458,6 +465,7 @@ function AdminReceiptDetailsContent() {
                                    value={item.productName}
                                    onChange={(e) => handleInputChange(index, 'productName', e.target.value, 'given')}
                                    className="w-full"
+                                   placeholder='Item name'
                                  />
                                </td>
                                <td className="p-2 border">
@@ -467,7 +475,7 @@ function AdminReceiptDetailsContent() {
                                    onChange={(e) => handleInputChange(index, 'pureWeight', e.target.value, 'given')}
                                    className="w-full text-right"
                                    step="0.001"
-                                    placeholder="0.000"
+                                   placeholder="0.000"
                                  />
                                </td>
                                <td className="p-2 border">
@@ -490,13 +498,13 @@ function AdminReceiptDetailsContent() {
                                    placeholder="0.00"
                                   />
                                </td>
-                               <td className="p-2 border text-right">{item.total.toFixed(3)}</td> {/* Display calculated total */}
+                               <td className="p-2 border text-right">{item.total.toFixed(3)}</td>
                                <td className="p-2 border text-center">
                                  <Button
                                    variant="ghost"
                                    size="icon"
                                    onClick={() => handleRemoveItem(item.id, 'given')}
-                                   disabled={givenItems.length <= 1} // Prevent removing the last required row
+                                   disabled={givenItems.length <= 1}
                                    className="text-destructive hover:text-destructive/80"
                                  >
                                    <Trash2 className="h-4 w-4" />
@@ -507,11 +515,11 @@ function AdminReceiptDetailsContent() {
                            {/* Total Row */}
                            <tr className="bg-muted font-semibold">
                              <td colSpan={2} className="p-2 border text-right">Total:</td>
-                             <td className="p-2 border text-right">{totalGivenPureWeight.toFixed(3)}</td> {/* Sum Pure Weight */}
-                             <td className="p-2 border"></td> {/* Empty cell for Pure % */}
-                             <td className="p-2 border"></td> {/* Empty cell for Melting */}
-                             <td className="p-2 border text-right">{totalGivenTotal.toFixed(3)}</td> {/* Sum Total */}
-                             <td className="p-2 border"></td> {/* Empty cell for Action */}
+                             <td className="p-2 border text-right">{totalGivenPureWeight.toFixed(3)}</td>
+                             <td className="p-2 border"></td>
+                             <td className="p-2 border"></td>
+                             <td className="p-2 border text-right">{totalGivenTotal.toFixed(3)}</td>
+                             <td className="p-2 border"></td>
                            </tr>
                          </tbody>
                        </table>
@@ -586,6 +594,7 @@ function AdminReceiptDetailsContent() {
                                             value={item.productName}
                                             onChange={(e) => handleInputChange(index, 'productName', e.target.value, 'received')}
                                             className="w-full"
+                                            placeholder='Item name'
                                           />
                                         </td>
                                         <td className="p-2 border">
@@ -625,7 +634,7 @@ function AdminReceiptDetailsContent() {
                                               variant="ghost"
                                               size="icon"
                                               onClick={() => handleRemoveItem(item.id, 'received')}
-                                              disabled={receivedItems.length <= 1} // Prevent removing the last row
+                                              disabled={receivedItems.length <= 1}
                                               className="text-destructive hover:text-destructive/80"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -637,11 +646,11 @@ function AdminReceiptDetailsContent() {
                                     <tr className="bg-muted font-semibold">
                                         <td colSpan={2} className="p-2 border text-right">Total:</td>
                                         <td className="p-2 border text-right">{totalReceivedFinalOrnamentsWt.toFixed(3)}</td>
-                                        <td className="p-2 border text-right">{totalReceivedStoneWeight.toFixed(3)}</td> {/* Sum Stone Weight */}
+                                        <td className="p-2 border text-right">{totalReceivedStoneWeight.toFixed(3)}</td>
                                         <td className="p-2 border text-right">{totalReceivedSubTotal.toFixed(3)}</td>
-                                        <td className="p-2 border"></td> {/* Empty for Making Charge */}
+                                        <td className="p-2 border"></td>
                                         <td className="p-2 border text-right">{totalReceivedTotal.toFixed(3)}</td>
-                                         <td className="p-2 border"></td> {/* Empty cell for Action */}
+                                         <td className="p-2 border"></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -721,3 +730,4 @@ function AdminReceiptDetailsContent() {
     </Layout>
   );
 }
+

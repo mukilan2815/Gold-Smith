@@ -1,31 +1,31 @@
 
 'use client';
 
-import type { ChangeEvent } from 'react'; // Import ChangeEvent
+import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { doc, getDoc, Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { format, isValid, parseISO } from 'date-fns'; // Import isValid, parseISO
 
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input'; // Import Input
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils'; // Import cn for conditional classes
+import { cn } from '@/lib/utils';
 
-// --- Interfaces (should match admin-receipt/details) ---
+// --- Interfaces (Matching Firestore structure) ---
 interface GivenItem {
   id: string;
   productName: string;
   pureWeight: string;
   purePercent: string;
   melting: string;
-  total: number;
+  total: number; // Stored as calculated number
 }
 
 interface ReceivedItem {
@@ -33,21 +33,23 @@ interface ReceivedItem {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  subTotal: number;
+  subTotal: number; // Stored as calculated number
   makingChargePercent: string;
-  total: number;
+  total: number; // Stored as calculated number
 }
 
 interface AdminReceiptData {
   clientId: string;
   clientName: string;
-  dateGiven: string | null;
+  dateGiven: string | null; // ISO String or null
   given: GivenItem[];
-  dateReceived: string | null;
-  received: ReceivedItem[] | null; // Can be null
+  dateReceived: string | null; // ISO String or null
+  received: ReceivedItem[] | null; // Array or null
+  createdAt?: Timestamp; // Firestore Timestamp
+  updatedAt?: Timestamp; // Firestore Timestamp
 }
 
-// --- Helper Functions (Copied from admin-receipt/details for consistency) ---
+// --- Helper Functions (Copied from details for consistency) ---
 const calculateGivenTotal = (item: GivenItem): number => {
   const pureWeight = parseFloat(item.pureWeight) || 0;
   const purePercent = parseFloat(item.purePercent) || 0;
@@ -101,7 +103,7 @@ function AdminBillViewContent() {
       if (!receiptId) {
         toast({ variant: "destructive", title: "Error", description: "Receipt ID is missing." });
         setLoading(false);
-        router.push('/admin-bill'); // Redirect if no ID
+        router.push('/admin-bill');
         return;
       }
       setLoading(true);
@@ -110,15 +112,15 @@ function AdminBillViewContent() {
         const docSnap = await getDoc(receiptRef);
 
         if (docSnap.exists()) {
-          setReceiptData(docSnap.data() as AdminReceiptData);
+          setReceiptData({ id: docSnap.id, ...docSnap.data() } as AdminReceiptData);
         } else {
           toast({ variant: "destructive", title: "Not Found", description: "Receipt not found." });
-          router.push('/admin-bill'); // Redirect if not found
+          router.push('/admin-bill');
         }
       } catch (error) {
         console.error("Error fetching receipt:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load receipt details." });
-         router.push('/admin-bill'); // Redirect on error
+         router.push('/admin-bill');
       } finally {
         setLoading(false);
       }
@@ -128,43 +130,45 @@ function AdminBillViewContent() {
   }, [receiptId, toast, router]);
 
   // --- Calculations for Totals ---
-    const calculateTotals = (items: (GivenItem | ReceivedItem)[], type: 'given' | 'received') => {
-      let totalPureWeight = 0;
-      let totalGivenTotal = 0;
-      let totalFinalOrnamentsWt = 0;
-      let totalStoneWeight = 0;
-      let totalReceivedSubTotal = 0;
-      let totalReceivedTotal = 0;
+  const calculateTotals = (items: (GivenItem | ReceivedItem)[], type: 'given' | 'received') => {
+    let totalPureWeight = 0;
+    let totalGivenTotal = 0;
+    let totalFinalOrnamentsWt = 0;
+    let totalStoneWeight = 0;
+    let totalReceivedSubTotal = 0;
+    let totalReceivedTotal = 0;
 
-      if (type === 'given') {
-          (items as GivenItem[]).forEach(item => {
-              const itemTotal = calculateGivenTotal(item); // Recalculate to be sure
-              totalPureWeight += parseFloat(item.pureWeight) || 0;
-              totalGivenTotal += itemTotal;
-          });
-      } else { // received
-          (items as ReceivedItem[]).forEach(item => {
-               const itemSubTotal = calculateReceivedSubTotal(item); // Recalculate
-               const itemTotal = calculateReceivedTotal(item);    // Recalculate
-               totalFinalOrnamentsWt += parseFloat(item.finalOrnamentsWt) || 0;
-               totalStoneWeight += parseFloat(item.stoneWeight) || 0;
-               totalReceivedSubTotal += itemSubTotal;
-               totalReceivedTotal += itemTotal;
-          });
-      }
+    if (type === 'given' && items) {
+        (items as GivenItem[]).forEach(item => {
+            const itemTotal = calculateGivenTotal(item); // Use helper
+            totalPureWeight += parseFloat(item.pureWeight) || 0;
+            totalGivenTotal += itemTotal;
+        });
+    } else if (type === 'received' && items) { // received and items exist
+        (items as ReceivedItem[]).forEach(item => {
+             const itemSubTotal = calculateReceivedSubTotal(item); // Use helper
+             const itemTotal = calculateReceivedTotal(item);    // Use helper
+             totalFinalOrnamentsWt += parseFloat(item.finalOrnamentsWt) || 0;
+             totalStoneWeight += parseFloat(item.stoneWeight) || 0;
+             totalReceivedSubTotal += itemSubTotal;
+             totalReceivedTotal += itemTotal;
+        });
+    }
 
-      return {
-          totalPureWeight: totalPureWeight.toFixed(3),
-          totalGivenTotal: totalGivenTotal.toFixed(3),
-          totalFinalOrnamentsWt: totalFinalOrnamentsWt.toFixed(3),
-          totalStoneWeight: totalStoneWeight.toFixed(3),
-          totalReceivedSubTotal: totalReceivedSubTotal.toFixed(3),
-          totalReceivedTotal: totalReceivedTotal.toFixed(3),
-      };
+    return {
+        totalPureWeight: totalPureWeight.toFixed(3),
+        totalGivenTotal: totalGivenTotal.toFixed(3),
+        totalFinalOrnamentsWt: totalFinalOrnamentsWt.toFixed(3),
+        totalStoneWeight: totalStoneWeight.toFixed(3),
+        totalReceivedSubTotal: totalReceivedSubTotal.toFixed(3),
+        totalReceivedTotal: totalReceivedTotal.toFixed(3),
+    };
   };
 
   const givenTotals = receiptData?.given ? calculateTotals(receiptData.given, 'given') : null;
-  const receivedTotals = receiptData?.received ? calculateTotals(receiptData.received, 'received') : null;
+  // Ensure receiptData.received is treated as an array, even if null
+  const receivedTotals = calculateTotals(receiptData?.received ?? [], 'received');
+
 
    // --- Manual Calculation ---
    const calculateManualResult = () => {
@@ -176,7 +180,7 @@ function AdminBillViewContent() {
      } else { // Subtract
        result = given - received;
      }
-     return result.toFixed(3); // Display with 3 decimal places
+     return result.toFixed(3);
    };
 
 
@@ -184,7 +188,7 @@ function AdminBillViewContent() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-screen">
+        <div className="flex justify-center items-center min-h-screen">
           <p>Loading receipt view...</p>
         </div>
       </Layout>
@@ -194,9 +198,9 @@ function AdminBillViewContent() {
   if (!receiptData) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-screen">
-          <p>Receipt data could not be loaded.</p>
-          <Button onClick={() => router.back()} variant="outline" className="mt-4">
+        <div className="flex flex-col justify-center items-center min-h-screen p-4">
+          <p className="text-destructive mb-4">Receipt data could not be loaded or found.</p>
+          <Button onClick={() => router.back()} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" /> Go Back
           </Button>
         </div>
@@ -204,8 +208,16 @@ function AdminBillViewContent() {
     );
   }
 
-  const hasGivenData = receiptData.given && receiptData.given.length > 0;
-  const hasReceivedData = receiptData.received && receiptData.received.length > 0;
+  // Check if there's valid data to display for each section
+  const hasGivenData = receiptData.given && Array.isArray(receiptData.given) && receiptData.given.length > 0;
+  // Use `?? []` to safely check length even if `received` is null
+  const hasReceivedData = receiptData.received && Array.isArray(receiptData.received) && receiptData.received.length > 0;
+
+  // Parse and format dates safely
+  const formattedDateGiven = receiptData.dateGiven && isValid(parseISO(receiptData.dateGiven))
+                              ? format(parseISO(receiptData.dateGiven), 'PPP') : 'N/A';
+  const formattedDateReceived = receiptData.dateReceived && isValid(parseISO(receiptData.dateReceived))
+                                ? format(parseISO(receiptData.dateReceived), 'PPP') : 'N/A';
 
   return (
     <Layout>
@@ -214,7 +226,7 @@ function AdminBillViewContent() {
          <CardHeader className="flex flex-row justify-between items-center">
              <div>
                 <CardTitle className="text-2xl">Admin Receipt View</CardTitle>
-                <CardDescription>Client: {receiptData.clientName}</CardDescription>
+                <CardDescription>Client: {receiptData.clientName} (ID: {receiptData.clientId})</CardDescription>
              </div>
               <Button onClick={() => router.back()} variant="outline" size="sm">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
@@ -224,13 +236,11 @@ function AdminBillViewContent() {
 
 
         {/* Given Section */}
-        {hasGivenData && (
+        {hasGivenData ? (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Given Details</CardTitle>
-              {receiptData.dateGiven && (
-                <CardDescription>Date: {format(new Date(receiptData.dateGiven), 'PPP')}</CardDescription>
-              )}
+              <CardDescription>Date: {formattedDateGiven}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -271,8 +281,7 @@ function AdminBillViewContent() {
               </div>
             </CardContent>
           </Card>
-        )}
-         {!hasGivenData && (
+        ) : (
             <Card className="mb-6 border-dashed border-muted-foreground">
                 <CardContent className="p-6 text-center text-muted-foreground">
                     No "Given" items recorded for this receipt.
@@ -281,17 +290,15 @@ function AdminBillViewContent() {
         )}
 
 
-        {/* Separator if both sections exist */}
+        {/* Separator only if both sections have data */}
         {hasGivenData && hasReceivedData && <Separator className="my-6" />}
 
         {/* Received Section */}
-        {hasReceivedData && (
-          <Card className="mb-6"> {/* Added margin-bottom */}
+        {hasReceivedData ? (
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle>Received Details</CardTitle>
-              {receiptData.dateReceived && (
-                <CardDescription>Date: {format(new Date(receiptData.dateReceived), 'PPP')}</CardDescription>
-              )}
+               <CardDescription>Date: {formattedDateReceived}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -308,7 +315,7 @@ function AdminBillViewContent() {
                         </tr>
                     </thead>
                     <tbody>
-                        {receiptData.received!.map((item, index) => (
+                        {(receiptData.received ?? []).map((item, index) => ( // Use nullish coalescing
                            <tr key={item.id}>
                               <td className="p-2 border">{index + 1}</td>
                               <td className="p-2 border">{item.productName}</td>
@@ -326,7 +333,7 @@ function AdminBillViewContent() {
                                <td className="p-2 border text-right">{receivedTotals.totalFinalOrnamentsWt}</td>
                                <td className="p-2 border text-right">{receivedTotals.totalStoneWeight}</td>
                                <td className="p-2 border text-right">{receivedTotals.totalReceivedSubTotal}</td>
-                               <td className="p-2 border"></td> {/* Empty for Making Charge % */}
+                               <td className="p-2 border"></td>
                                <td className="p-2 border text-right">{receivedTotals.totalReceivedTotal}</td>
                            </tr>
                          )}
@@ -335,9 +342,8 @@ function AdminBillViewContent() {
               </div>
             </CardContent>
           </Card>
-        )}
-        {!hasReceivedData && (
-           <Card className="mb-6 border-dashed border-muted-foreground"> {/* Added margin-bottom */}
+        ) : (
+           <Card className="mb-6 border-dashed border-muted-foreground">
                <CardContent className="p-6 text-center text-muted-foreground">
                    No "Received" items recorded for this receipt.
                </CardContent>
@@ -370,7 +376,7 @@ function AdminBillViewContent() {
                 value={manualOperation}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setManualOperation(e.target.value as 'add' | 'subtract')}
                 className={cn(
-                   "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" // Using cn for consistent styling
+                   "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 )} >
                 <option value="subtract">Subtract (-)</option>
                 <option value="add">Add (+)</option>
@@ -394,7 +400,7 @@ function AdminBillViewContent() {
                 type="text"
                 value={calculateManualResult()}
                 readOnly
-                className="font-semibold text-right bg-muted" // Added bg-muted for read-only look
+                className="font-semibold text-right bg-muted"
               />
             </div>
           </CardContent>
@@ -404,3 +410,4 @@ function AdminBillViewContent() {
     </Layout>
   );
 }
+
