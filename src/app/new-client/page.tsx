@@ -12,6 +12,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; // Imp
 import { db } from '@/lib/firebase'; // Import Firestore instance
 
 export default function NewClientPage() {
+  // The 'use client' directive is added by default by the containing component pattern
   return (
     <Layout>
       <NewClientContent />
@@ -24,65 +25,72 @@ function NewClientContent() {
   const [clientName, setClientName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
-  const [isSaving, setIsSaving] = useState(false); // Add saving state
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   const handleSaveClient = async () => {
-    // Validate input
+    console.log('Attempting to save client...'); // Debug log
+
+    // Basic client-side validation
     if (
-      shopName.trim() === '' ||
-      clientName.trim() === '' ||
-      phoneNumber.trim() === '' ||
-      address.trim() === ''
+      !shopName.trim() ||
+      !clientName.trim() ||
+      !phoneNumber.trim() ||
+      !address.trim()
     ) {
       toast({
         variant: 'destructive',
-        title: 'Error',
+        title: 'Validation Error',
         description: 'Please fill in all fields.',
       });
+      console.log('Validation failed.'); // Debug log
       return;
     }
 
-    setIsSaving(true); // Indicate saving process started
+    setIsSaving(true);
+    console.log('Saving state set to true.'); // Debug log
 
     try {
-      // Create new client object for Firestore
       const newClient = {
         shopName: shopName.trim(),
         clientName: clientName.trim(),
         phoneNumber: phoneNumber.trim(),
         address: address.trim(),
-        createdAt: serverTimestamp(), // Add a timestamp for sorting
+        createdAt: serverTimestamp(),
       };
 
-      // Add the new client to the 'Clients' collection in Firestore
+      console.log('Client data prepared:', newClient); // Debug log
+
       const docRef = await addDoc(collection(db, 'Clients'), newClient);
+      console.log('Client added with ID:', docRef.id); // Debug log
 
       toast({
         title: 'Client Saved!',
-        description: `${clientName}'s details have been saved successfully. (ID: ${docRef.id})`,
+        description: `${clientName}'s details saved successfully. (ID: ${docRef.id})`,
       });
 
-      // Clear the form after successful save
+      // Reset form fields
       setShopName('');
       setClientName('');
       setPhoneNumber('');
       setAddress('');
+      console.log('Form cleared.'); // Debug log
 
-    } catch (error) {
-      console.error("Error adding client to Firestore: ", error);
+    } catch (error: any) { // Catch specific error type if possible
+      console.error("Error adding client to Firestore: ", error); // Log the full error
       toast({
         variant: 'destructive',
         title: 'Save Error',
-        description: 'Could not save client details. Please try again.',
+        description: `Could not save client details. Error: ${error.message || 'Unknown error'}`, // Show error message
       });
     } finally {
-      setIsSaving(false); // Indicate saving process finished
+      setIsSaving(false);
+      console.log('Saving state set to false.'); // Debug log
     }
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-secondary p-4"> {/* Adjusted padding and min-height */}
+    <div className="flex justify-center items-center min-h-screen bg-secondary p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
@@ -96,7 +104,8 @@ function NewClientContent() {
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
               maxLength={50}
-              disabled={isSaving} // Disable input while saving
+              disabled={isSaving}
+              placeholder="Enter shop name" // Added placeholder
             />
           </div>
           <div className="grid gap-2">
@@ -107,16 +116,18 @@ function NewClientContent() {
               onChange={(e) => setClientName(e.target.value)}
               maxLength={50}
               disabled={isSaving}
+              placeholder="Enter client name" // Added placeholder
             />
           </div>
           <div className="grid gap-2">
             <label htmlFor="phoneNumber">Phone Number</label>
             <Input
               id="phoneNumber"
-              type="text" // Changed to text for flexibility (e.g., +,-, spaces)
+              type="tel" // Changed to tel for semantic correctness
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               disabled={isSaving}
+              placeholder="Enter phone number" // Added placeholder
             />
           </div>
           <div className="grid gap-2">
@@ -126,10 +137,12 @@ function NewClientContent() {
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               disabled={isSaving}
+              placeholder="Enter full address" // Added placeholder
+              rows={3} // Adjusted rows for better default size
             />
           </div>
           <Button onClick={handleSaveClient} disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save Client'} {/* Show loading state */}
+            {isSaving ? 'Saving...' : 'Save Client'}
           </Button>
         </CardContent>
       </Card>
