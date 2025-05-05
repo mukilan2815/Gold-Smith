@@ -1,4 +1,4 @@
-{'use client';
+'use client';
 
 import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
