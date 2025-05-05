@@ -11,6 +11,7 @@ import {
   Plus,
   User,
   ShieldCheck, // Added for Admin Receipt
+  Receipt, // Added for Admin Bill
 } from 'lucide-react';
 import {useRouter} from 'next/navigation';
 
@@ -37,6 +38,8 @@ export default function SidebarContentComponent() {
 
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
+    // Remove user info on logout
+    localStorage.removeItem('user');
     toast({ // Use toast for feedback
       title: 'Logged out successfully!',
       description: 'Redirecting to login page...',
@@ -92,7 +95,12 @@ export default function SidebarContentComponent() {
                <span>Admin Receipt</span>
              </SidebarMenuButton>
            </SidebarMenuItem>
-           {/* Add Admin Bill link later here */}
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => handleNavigation('/admin-bill')}>
+                <Receipt /> {/* Use an appropriate icon */}
+                <span>Admin Bill</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
          </SidebarMenu>
        </SidebarGroup>
 
