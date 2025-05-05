@@ -1,5 +1,7 @@
+
 'use client';
 
+import type { ChangeEvent } from 'react'; // Import ChangeEvent
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
@@ -7,12 +9,14 @@ import { format } from 'date-fns';
 
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input'; // Import Input
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
-import { Separator } from '@/components/ui/separator'; // Import Separator
-import { Button } from '@/components/ui/button'; // Import Button
-import { ArrowLeft } from 'lucide-react'; // Import Icon
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils'; // Import cn for conditional classes
 
 // --- Interfaces (should match admin-receipt/details) ---
 interface GivenItem {
@@ -78,12 +82,18 @@ export default function AdminBillViewPage() {
 
 function AdminBillViewContent() {
   const searchParams = useSearchParams();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
   const { toast } = useToast();
   const receiptId = searchParams.get('receiptId');
 
   const [receiptData, setReceiptData] = useState<AdminReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // State for manual calculation
+  const [manualGivenTotal, setManualGivenTotal] = useState('');
+  const [manualReceivedTotal, setManualReceivedTotal] = useState('');
+  const [manualOperation, setManualOperation] = useState<'add' | 'subtract'>('subtract');
+
 
   // --- Fetch Receipt Data ---
   useEffect(() => {
@@ -155,6 +165,19 @@ function AdminBillViewContent() {
 
   const givenTotals = receiptData?.given ? calculateTotals(receiptData.given, 'given') : null;
   const receivedTotals = receiptData?.received ? calculateTotals(receiptData.received, 'received') : null;
+
+   // --- Manual Calculation ---
+   const calculateManualResult = () => {
+     const given = parseFloat(manualGivenTotal) || 0;
+     const received = parseFloat(manualReceivedTotal) || 0;
+     let result = 0;
+     if (manualOperation === 'add') {
+       result = given + received;
+     } else { // Subtract
+       result = given - received;
+     }
+     return result.toFixed(3); // Display with 3 decimal places
+   };
 
 
   // --- Render Logic ---
@@ -263,7 +286,7 @@ function AdminBillViewContent() {
 
         {/* Received Section */}
         {hasReceivedData && (
-          <Card>
+          <Card className="mb-6"> {/* Added margin-bottom */}
             <CardHeader>
               <CardTitle>Received Details</CardTitle>
               {receiptData.dateReceived && (
@@ -314,12 +337,68 @@ function AdminBillViewContent() {
           </Card>
         )}
         {!hasReceivedData && (
-           <Card className="border-dashed border-muted-foreground">
+           <Card className="mb-6 border-dashed border-muted-foreground"> {/* Added margin-bottom */}
                <CardContent className="p-6 text-center text-muted-foreground">
                    No "Received" items recorded for this receipt.
                </CardContent>
            </Card>
        )}
+
+        {/* Manual Comparison Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Manual Comparison</CardTitle>
+            <CardDescription>Manually input totals for comparison (not saved).</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label htmlFor="manualGiven" className="block text-sm font-medium text-muted-foreground mb-1">Given Total</label>
+              <Input
+                id="manualGiven"
+                type="number"
+                value={manualGivenTotal}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setManualGivenTotal(e.target.value)}
+                placeholder="Enter Given Total"
+                step="0.001"
+                className="text-right"
+              />
+            </div>
+            <div>
+              <label htmlFor="manualOperation" className="block text-sm font-medium text-muted-foreground mb-1">Operation</label>
+              <select
+                id="manualOperation"
+                value={manualOperation}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setManualOperation(e.target.value as 'add' | 'subtract')}
+                className={cn(
+                   "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" // Using cn for consistent styling
+                )} >
+                <option value="subtract">Subtract (-)</option>
+                <option value="add">Add (+)</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="manualReceived" className="block text-sm font-medium text-muted-foreground mb-1">Received Total</label>
+              <Input
+                id="manualReceived"
+                type="number"
+                value={manualReceivedTotal}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setManualReceivedTotal(e.target.value)}
+                placeholder="Enter Received Total"
+                step="0.001"
+                className="text-right"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">Result</label>
+              <Input
+                type="text"
+                value={calculateManualResult()}
+                readOnly
+                className="font-semibold text-right bg-muted" // Added bg-muted for read-only look
+              />
+            </div>
+          </CardContent>
+        </Card>
 
       </div>
     </Layout>
