@@ -277,9 +277,11 @@ function AdminReceiptDetailsContent() {
 
     try {
       let docRef;
-      if (currentReceiptId) {
+      let tempCurrentReceiptId = currentReceiptId; // Use a temporary variable
+
+      if (tempCurrentReceiptId) {
         // --- Updating Existing Receipt ---
-        docRef = doc(db, 'AdminReceipts', currentReceiptId);
+        docRef = doc(db, 'AdminReceipts', tempCurrentReceiptId);
 
         // Fetch existing data to merge correctly, preserving the *other* tab's data
         const existingDocSnap = await getDoc(docRef);
@@ -298,12 +300,13 @@ function AdminReceiptDetailsContent() {
           }
         } else {
           // If the doc doesn't exist unexpectedly, treat as creation
-          console.warn(`Document ${currentReceiptId} not found during update, will create new.`);
-          currentReceiptId = null; // Force creation logic below
+          console.warn(`Document ${tempCurrentReceiptId} not found during update, will create new.`);
+          setCurrentReceiptId(null); // Force creation logic below using state setter
+          tempCurrentReceiptId = null; // Update temp variable as well
           dataToSave.createdAt = serverTimestamp();
         }
 
-        if (currentReceiptId) { // Check again if it wasn't reset
+        if (tempCurrentReceiptId) { // Check temp variable
            await updateDoc(docRef, dataToSave);
            toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
         }
@@ -311,7 +314,7 @@ function AdminReceiptDetailsContent() {
       }
 
       // --- Creating New Receipt (or if update failed finding doc) ---
-       if (!currentReceiptId) {
+       if (!tempCurrentReceiptId) { // Check temp variable for creation case
         const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
         dataToSave.createdAt = serverTimestamp();
 
