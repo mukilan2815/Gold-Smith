@@ -12,7 +12,6 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; // Imp
 import { db } from '@/lib/firebase'; // Import Firestore instance
 
 export default function NewClientPage() {
-  // The 'use client' directive is added by default by the containing component pattern
   return (
     <Layout>
       <NewClientContent />
@@ -29,7 +28,7 @@ function NewClientContent() {
   const { toast } = useToast();
 
   const handleSaveClient = async () => {
-    console.log('Attempting to save client...'); // Debug log
+    // console.log('Attempting to save client...'); // Debug log
 
     // Basic client-side validation
     if (
@@ -43,12 +42,12 @@ function NewClientContent() {
         title: 'Validation Error',
         description: 'Please fill in all fields.',
       });
-      console.log('Validation failed.'); // Debug log
+      // console.log('Validation failed.'); // Debug log
       return;
     }
 
     setIsSaving(true);
-    console.log('Saving state set to true.'); // Debug log
+    // console.log('Saving state set to true.'); // Debug log
 
     try {
       const newClient = {
@@ -56,36 +55,38 @@ function NewClientContent() {
         clientName: clientName.trim(),
         phoneNumber: phoneNumber.trim(),
         address: address.trim(),
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp(), // Use server timestamp for consistency
       };
 
-      console.log('Client data prepared:', newClient); // Debug log
+      // console.log('Client data prepared:', newClient); // Debug log
 
+      // Add document to Firestore
       const docRef = await addDoc(collection(db, 'Clients'), newClient);
-      console.log('Client added with ID:', docRef.id); // Debug log
+      // console.log('Client added with ID:', docRef.id); // Debug log
 
       toast({
         title: 'Client Saved!',
-        description: `${clientName}'s details saved successfully. (ID: ${docRef.id})`,
+        description: `${clientName}'s details saved successfully.`, // Simplified message
       });
 
-      // Reset form fields
+      // Reset form fields after successful save
       setShopName('');
       setClientName('');
       setPhoneNumber('');
       setAddress('');
-      console.log('Form cleared.'); // Debug log
+      // console.log('Form cleared.'); // Debug log
 
     } catch (error: any) { // Catch specific error type if possible
       console.error("Error adding client to Firestore: ", error); // Log the full error
       toast({
         variant: 'destructive',
         title: 'Save Error',
-        description: `Could not save client details. Error: ${error.message || 'Unknown error'}`, // Show error message
+        description: `Could not save client details. Please check your connection and try again. Error: ${error.message || 'Unknown error'}`, // Show error message
       });
     } finally {
+      // Ensure saving state is reset regardless of success or failure
       setIsSaving(false);
-      console.log('Saving state set to false.'); // Debug log
+      // console.log('Saving state set to false.'); // Debug log
     }
   };
 
@@ -105,7 +106,7 @@ function NewClientContent() {
               onChange={(e) => setShopName(e.target.value)}
               maxLength={50}
               disabled={isSaving}
-              placeholder="Enter shop name" // Added placeholder
+              placeholder="Enter shop name"
             />
           </div>
           <div className="grid gap-2">
@@ -116,18 +117,18 @@ function NewClientContent() {
               onChange={(e) => setClientName(e.target.value)}
               maxLength={50}
               disabled={isSaving}
-              placeholder="Enter client name" // Added placeholder
+              placeholder="Enter client name"
             />
           </div>
           <div className="grid gap-2">
             <label htmlFor="phoneNumber">Phone Number</label>
             <Input
               id="phoneNumber"
-              type="tel" // Changed to tel for semantic correctness
+              type="tel" // Use tel for semantic correctness
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               disabled={isSaving}
-              placeholder="Enter phone number" // Added placeholder
+              placeholder="Enter phone number"
             />
           </div>
           <div className="grid gap-2">
@@ -137,8 +138,8 @@ function NewClientContent() {
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               disabled={isSaving}
-              placeholder="Enter full address" // Added placeholder
-              rows={3} // Adjusted rows for better default size
+              placeholder="Enter full address"
+              rows={3}
             />
           </div>
           <Button onClick={handleSaveClient} disabled={isSaving}>
