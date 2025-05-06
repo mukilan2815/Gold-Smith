@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { collection, addDoc, updateDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore'; // Import Firestore functions
 import { format, parseISO, isValid } from 'date-fns';
-import { Calendar as CalendarIcon, PlusCircle, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, PlusCircle, Download, Trash2, Edit, Save, XCircle } from 'lucide-react'; // Added Edit, Save, XCircle
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -39,7 +39,7 @@ interface ClientReceiptData {
   phoneNumber?: string; // Added for easier display in bill page
   metalType: string;
   issueDate: string; // Store as ISO string
-  tableData: ReceiptItem[];
+  tableData: Omit<ReceiptItem, 'sNo'>[]; // Store without UI sNo
   totals: {
     grossWt: number;
     stoneWt: number; // Added stoneWt total
@@ -72,13 +72,14 @@ function ReceiptDetailsContent() {
   const receiptIdParam = searchParams.get('receiptId'); // For editing existing receipts
 
   // State for form fields
-  const [date, setDate] = useState<Date | undefined>(new Date()); // Default to today
+  const [date, setDate] = useState<Date | undefined>(undefined); // Default to undefined for new
   const [metal, setMetal] = useState('');
-  const [weight, setWeight] = useState(''); // Note: 'weight' isn't in the new schema, keeping for now if needed elsewhere, but won't be saved to ClientReceipts
-  const [weightUnit, setWeightUnit] = useState(''); // Note: 'weightUnit' isn't in the new schema
+  const [weight, setWeight] = useState(''); // Overall weight - Not saved in current schema
+  const [weightUnit, setWeightUnit] = useState(''); // Overall weight unit - Not saved in current schema
   const [items, setItems] = useState<ReceiptItem[]>([
     { itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' },
   ]);
+  const [initialState, setInitialState] = useState<{ date?: Date, metal: string, weight: string, weightUnit: string, items: ReceiptItem[] } | null>(null); // For cancel edit
 
   // State for managing edit mode and loading
   const [isEditMode, setIsEditMode] = useState(!receiptIdParam); // Start in edit mode if creating new
@@ -86,86 +87,114 @@ function ReceiptDetailsContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [existingReceiptId, setExistingReceiptId] = useState<string | null>(receiptIdParam);
 
-   // --- Fetch Client Details (Optional but good for display) ---
-   const [clientShopName, setClientShopName] = useState('');
-   const [clientPhoneNumber, setClientPhoneNumber] = useState('');
+  // --- Fetch Client Details (Optional but good for display) ---
+  const [clientShopName, setClientShopName] = useState('');
+  const [clientPhoneNumber, setClientPhoneNumber] = useState('');
 
-   useEffect(() => {
-     const fetchClientData = async () => {
-       if (clientIdParam) {
-         try {
-           const clientRef = doc(db, 'ClientDetails', clientIdParam);
-           const docSnap = await getDoc(clientRef);
-           if (docSnap.exists()) {
-             const clientData = docSnap.data();
-             setClientShopName(clientData.shopName || '');
-             setClientPhoneNumber(clientData.phoneNumber || '');
-           }
-         } catch (error) {
-           console.error("Error fetching client details:", error);
-           // Non-critical error, proceed without shop/phone if fetch fails
-         }
-       }
-     };
-     fetchClientData();
-   }, [clientIdParam]);
-
-
-  // --- Fetch Existing Receipt Data ---
-  useEffect(() => {
-    const fetchReceipt = async () => {
-      if (existingReceiptId && clientIdParam) {
-        setIsLoading(true);
-        try {
-          const receiptRef = doc(db, 'ClientReceipts', existingReceiptId);
-          const docSnap = await getDoc(receiptRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data() as ClientReceiptData;
-            setDate(data.issueDate && isValid(parseISO(data.issueDate)) ? parseISO(data.issueDate) : new Date());
-            setMetal(data.metalType || '');
-            // Weight and Unit are not in the new schema, set them if needed for display?
-            // setWeight(data.weight || '');
-            // setWeightUnit(data.weightUnit || '');
-            setItems(data.tableData && data.tableData.length > 0 ? data.tableData : [{ itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' }]);
-            setIsEditMode(false); // Start in view mode when loading existing
-          } else {
-            toast({ variant: "destructive", title: "Not Found", description: "Receipt not found. Creating new." });
-            setExistingReceiptId(null); // Treat as new
-            setIsEditMode(true);
-          }
-        } catch (error) {
-          console.error("Error fetching receipt:", error);
-          toast({ variant: "destructive", title: "Error", description: "Could not load receipt details." });
-          setExistingReceiptId(null); // Treat as new on error
-          setIsEditMode(true);
-        } finally {
-          setIsLoading(false);
+  const fetchClientData = async () => {
+    if (clientIdParam) {
+      try {
+        const clientRef = doc(db, 'ClientDetails', clientIdParam);
+        const docSnap = await getDoc(clientRef);
+        if (docSnap.exists()) {
+          const clientData = docSnap.data();
+          setClientShopName(clientData.shopName || '');
+          setClientPhoneNumber(clientData.phoneNumber || '');
         }
-      } else {
-        // Creating a new receipt
-        setIsEditMode(true);
-        setIsLoading(false);
-         setItems([{ itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' }]); // Ensure clean slate
-         setDate(new Date()); // Default date for new receipt
-         setMetal('');
-         setWeight('');
-         setWeightUnit('');
+      } catch (error) {
+        console.error("Error fetching client details:", error);
+        // Non-critical error, proceed without shop/phone if fetch fails
       }
-    };
+    }
+  };
 
+  const fetchReceipt = async () => {
+    if (existingReceiptId && clientIdParam) {
+      setIsLoading(true);
+      try {
+        const receiptRef = doc(db, 'ClientReceipts', existingReceiptId);
+        const docSnap = await getDoc(receiptRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data() as ClientReceiptData;
+          const loadedDate = data.issueDate && isValid(parseISO(data.issueDate)) ? parseISO(data.issueDate) : undefined;
+          const loadedMetal = data.metalType || '';
+          // Note: weight and weightUnit are not in ClientReceiptData, load if they were previously saved (unlikely) or default
+          const loadedWeight = ''; // Default to empty as not in schema
+          const loadedWeightUnit = ''; // Default to empty as not in schema
+          const loadedItems = data.tableData && data.tableData.length > 0
+            ? data.tableData.map((item, index) => ({ ...item, sNo: index + 1 })) // Add back sNo for UI
+            : [{ sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' }];
+
+          setDate(loadedDate);
+          setMetal(loadedMetal);
+          setWeight(loadedWeight);
+          setWeightUnit(loadedWeightUnit);
+          setItems(loadedItems);
+          // Store initial state for cancel
+          setInitialState({ date: loadedDate, metal: loadedMetal, weight: loadedWeight, weightUnit: loadedWeightUnit, items: loadedItems });
+          setIsEditMode(false); // Start in view mode when loading existing
+        } else {
+          toast({ variant: "destructive", title: "Not Found", description: "Receipt not found. Creating new." });
+          setExistingReceiptId(null); // Treat as new
+          resetToNewReceiptState();
+          setIsEditMode(true);
+        }
+      } catch (error) {
+        console.error("Error fetching receipt:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not load receipt details." });
+        setExistingReceiptId(null); // Treat as new on error
+        resetToNewReceiptState();
+        setIsEditMode(true);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Creating a new receipt
+      resetToNewReceiptState();
+      setIsEditMode(true);
+      setIsLoading(false);
+    }
+  };
+
+   // --- Fetch Client and Receipt Data ---
+  useEffect(() => {
+    fetchClientData();
     fetchReceipt();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingReceiptId, clientIdParam]); // Rerun if receiptId changes
+  }, [existingReceiptId, clientIdParam]); // Rerun if receiptId changes or client changes
+
+
+  const resetToNewReceiptState = () => {
+     setDate(new Date()); // Default date for new receipt
+     setMetal('');
+     setWeight('');
+     setWeightUnit('');
+     setItems([{ sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' }]);
+     setInitialState(null); // No initial state for new receipt
+  };
 
   const handleAddItem = () => {
+    if (!isEditMode) return; // Only allow adding in edit mode
     setItems([
       ...items,
       { sNo: items.length + 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' },
     ]);
   };
 
+   const handleRemoveItem = (indexToRemove: number) => {
+    if (!isEditMode) return; // Only allow removal in edit mode
+    if (items.length <= 1) {
+        toast({ variant: "destructive", title: "Cannot Remove", description: "At least one item row is required." });
+        return;
+    }
+    setItems(items.filter((_, index) => index !== indexToRemove));
+  };
+
+
   const handleInputChange = (index: number, field: keyof ReceiptItem, value: any) => {
+    if (!isEditMode) return; // Only allow changes in edit mode
+
     const newItems = [...items];
     const currentItem = { ...newItems[index], [field]: value };
 
@@ -179,11 +208,9 @@ function ReceiptDetailsContent() {
 
     // Recalculate Final Weight
     const netWt = parseFloat(currentItem.netWt) || 0; // Use recalculated netWt
-    if (meltingTouch !== 0) {
-        currentItem.finalWt = ((netWt * meltingTouch) / 100).toFixed(3);
-    } else {
-        currentItem.finalWt = '0.000'; // Avoid division by zero
-    }
+    // Use 100 for melting/touch calculation as it's a percentage
+    currentItem.finalWt = ((netWt * meltingTouch) / 100).toFixed(3);
+
 
     newItems[index] = currentItem;
     setItems(newItems);
@@ -198,8 +225,31 @@ function ReceiptDetailsContent() {
    };
 
   const handleEditReceipt = () => {
+    if (initialState) {
+        // Store current state before entering edit mode if not already stored
+         setInitialState({ date, metal, weight, weightUnit, items });
+    } else if (existingReceiptId) {
+        // If editing an existing receipt but initialState is somehow null, store current view state
+         setInitialState({ date, metal, weight, weightUnit, items });
+    }
     setIsEditMode(true);
   };
+
+  const handleCancelEdit = () => {
+     if (initialState) {
+       // Restore state from before editing started
+       setDate(initialState.date);
+       setMetal(initialState.metal);
+       setWeight(initialState.weight);
+       setWeightUnit(initialState.weightUnit);
+       setItems(initialState.items);
+     } else {
+       // If no initial state (shouldn't happen when canceling an existing edit, but as fallback)
+       // Refetch original data
+        fetchReceipt();
+     }
+     setIsEditMode(false);
+   };
 
    const handleSaveReceipt = async () => {
     if (!clientIdParam) {
@@ -241,7 +291,8 @@ function ReceiptDetailsContent() {
 
 
     // Create receipt object according to the new schema
-    const receiptData: ClientReceiptData = {
+    // Exclude sNo from tableData and overall weight/unit from the main object
+    const receiptData: Omit<ClientReceiptData, 'createdAt' | 'updatedAt'> = {
       clientId: clientIdParam,
       clientName: clientNameParam, // Include name
       shopName: clientShopName, // Include shop name
@@ -254,9 +305,8 @@ function ReceiptDetailsContent() {
         stoneWt: parseFloat(totalStoneWt.toFixed(3)),
         netWt: parseFloat(totalNetWt.toFixed(3)),
         finalWt: parseFloat(totalFinalWt.toFixed(3)),
-        stoneAmt: parseFloat(totalStoneAmt.toFixed(3)), // Assuming stoneAmt can have decimals
+        stoneAmt: parseFloat(totalStoneAmt.toFixed(2)), // Assuming stoneAmt can have decimals
       },
-      // createdAt will be added on creation, updatedAt on update
     };
 
     try {
@@ -268,6 +318,8 @@ function ReceiptDetailsContent() {
           updatedAt: serverTimestamp(), // Add/Update updatedAt timestamp
         });
         toast({ title: 'Receipt Updated!', description: 'The receipt has been updated successfully.' });
+        // Update initial state to current saved state after successful update
+        setInitialState({ date, metal, weight, weightUnit, items });
       } else {
         // Create new receipt
         const docRef = await addDoc(collection(db, 'ClientReceipts'), {
@@ -275,10 +327,12 @@ function ReceiptDetailsContent() {
           createdAt: serverTimestamp(), // Add createdAt timestamp
           updatedAt: serverTimestamp(),
         });
-         setExistingReceiptId(docRef.id); // Store the new ID if needed for subsequent edits in the same session
+         setExistingReceiptId(docRef.id); // Store the new ID
          // Update URL without navigation to include the new receiptId
          router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${docRef.id}`, undefined);
-        toast({ title: 'Receipt Created!', description: 'The receipt has been saved successfully.' });
+         toast({ title: 'Receipt Created!', description: 'The receipt has been saved successfully.' });
+         // Set initial state after successful creation
+         setInitialState({ date, metal, weight, weightUnit, items });
       }
       setIsEditMode(false); // Exit edit mode after save/update
        // Optionally redirect to the bill page after saving
@@ -293,16 +347,21 @@ function ReceiptDetailsContent() {
 
 
   const downloadReceipt = () => {
-    if (!date) {
+     if (!date) {
         toast({ variant: "destructive", title: "Error", description: "Cannot download receipt without a date." });
         return;
     }
+    if (items.length === 0 || items.every(item => !item.itemName && !item.grossWt)) {
+        toast({ variant: "destructive", title: "Error", description: "Cannot download an empty receipt." });
+        return;
+    }
+
     const doc = new jsPDF();
 
     // --- Styling ---
     const primaryColor = '#000000'; // Black for text
     const backgroundColor = '#FFFFFF'; // White background
-    const borderColor = '#D4AF37'; // Gold-like border color
+    const borderColor = '#D4AF37'; // Gold-like border color (adjust as needed) gold: #FFD700, dark gold: #B8860B
     const headerColor = '#F5F5F5'; // Light grey for header background
     const titleFontSize = 20;
     const headingFontSize = 14;
@@ -319,21 +378,22 @@ function ReceiptDetailsContent() {
     doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
 
     // --- Background ---
-    doc.setFillColor(backgroundColor);
-    doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin, 'F');
+    // Removing fill to keep it white
+    // doc.setFillColor(backgroundColor);
+    // doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin, 'F');
 
     // --- Title ---
     doc.setFontSize(titleFontSize);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(primaryColor);
+    doc.setTextColor(primaryColor); // Keep title black
     const title = 'Goldsmith Receipt';
     const titleWidth = doc.getTextWidth(title);
-    const titleX = (pageWidth - titleWidth) / 2;
+    const titleX = (pageWidth - titleWidth) / 2; // Center align
     doc.text(title, titleX, margin + 10);
 
     // --- Client Details ---
     doc.setFontSize(textFontSize);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'normal'); // Regular font for details
     doc.setTextColor(primaryColor);
     let startY = margin + 25;
     doc.text(`Name: ${clientNameParam}`, margin + 5, startY);
@@ -342,21 +402,24 @@ function ReceiptDetailsContent() {
     startY += 6;
     doc.text(`Metals: ${metal || 'N/A'}`, margin + 5, startY);
     startY += 6;
-    // Weight and Unit are not part of the new schema, adjust if needed
-    // doc.text(`Weight: ${weight ? `${weight} ${weightUnit}` : 'N/A'}`, margin + 5, startY);
-    // startY += 6;
+    // Weight and Unit are not part of the saved schema, only show if entered in UI (optional)
+    if (weight && weightUnit) {
+        doc.text(`Weight: ${weight} ${weightUnit}`, margin + 5, startY);
+        startY += 6;
+    }
+
 
     // --- Table ---
     const tableColumn = ['Item Name', 'Tag', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Melting/Touch', 'Final (wt)', 'Stone Amt'];
     const tableRows = items.map((item) => [
       item.itemName || '',
       item.tag || '',
-      item.grossWt ? parseFloat(item.grossWt).toFixed(3) : '0.000',
-      item.stoneWt ? parseFloat(item.stoneWt).toFixed(3) : '0.000',
-      item.netWt ? parseFloat(item.netWt).toFixed(3) : '0.000',
-      item.meltingTouch ? parseFloat(item.meltingTouch).toFixed(2) : '0.00', // Assuming 2 decimals for melting
-      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '0.000',
-      item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '0.00', // Assuming 2 decimals for amount
+      item.grossWt ? parseFloat(item.grossWt).toFixed(3) : '', // Keep empty if 0 or NaN
+      item.stoneWt ? parseFloat(item.stoneWt).toFixed(3) : '',
+      item.netWt ? parseFloat(item.netWt).toFixed(3) : '',
+      item.meltingTouch ? parseFloat(item.meltingTouch).toFixed(2) : '', // Assuming 2 decimals for melting
+      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '',
+      item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '', // Assuming 2 decimals for amount
     ]);
 
      // Calculate totals again for the PDF
@@ -366,17 +429,6 @@ function ReceiptDetailsContent() {
      const totalFinalWt = calculateTotal('finalWt');
      const totalStoneAmt = calculateTotal('stoneAmt');
 
-    // Add total row to PDF data
-    tableRows.push([
-        { content: 'Total', styles: { fontStyle: 'bold', halign: 'right' } }, // Align 'Total' label right
-        '', // Empty cell for Tag total
-        { content: totalGrossWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: totalStoneWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: totalNetWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-        '', // Empty cell for Melting/Touch total
-        { content: totalFinalWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-        { content: totalStoneAmt.toFixed(2), styles: { fontStyle: 'bold', halign: 'right' } }, // Assuming 2 decimals for amount total
-    ]);
 
     autoTable(doc, {
         head: [tableColumn],
@@ -384,8 +436,8 @@ function ReceiptDetailsContent() {
         startY: startY + 5, // Add some space before the table
         theme: 'grid', // Use grid theme for clear borders
         headStyles: {
-            fillColor: headerColor, // Light grey header
-            textColor: primaryColor,
+            fillColor: headerColor, // Light grey header remains
+            textColor: primaryColor, // Black header text
             fontStyle: 'bold',
             fontSize: tableHeaderFontSize,
             lineWidth: 0.1,
@@ -393,7 +445,7 @@ function ReceiptDetailsContent() {
             halign: 'center' // Center align header text
         },
         bodyStyles: {
-            textColor: primaryColor,
+            textColor: primaryColor, // Black body text
             fontSize: tableBodyFontSize,
             lineWidth: 0.1,
             lineColor: [180, 180, 180],
@@ -403,8 +455,8 @@ function ReceiptDetailsContent() {
             fillColor: [248, 248, 248], // Very light grey for alternate rows
         },
         footStyles: { // Style the total row
-            fillColor: headerColor,
-            textColor: primaryColor,
+            fillColor: headerColor, // Match header background
+            textColor: primaryColor, // Black total text
             fontStyle: 'bold',
             fontSize: tableHeaderFontSize,
             lineWidth: 0.1,
@@ -433,21 +485,22 @@ function ReceiptDetailsContent() {
          },
           // Add the total row as the foot
          showFoot: 'lastPage', // Show footer only on the last page if table spans multiple pages
-         foot: [ // Define the content for the footer row (matches the structure of the last row pushed to body)
+         foot: [ // Define the content for the footer row
               [
                   { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } }, // Span 'Total' across first 2 columns
-                  //'', // Skip Tag column in footer
+                  //'', // Skip Tag column in footer - handled by colSpan
                   { content: totalGrossWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
                   { content: totalStoneWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
                   { content: totalNetWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
                   '', // Skip Melting/Touch column
                   { content: totalFinalWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-                  { content: totalStoneAmt.toFixed(2), styles: { fontStyle: 'bold', halign: 'right' } },
+                  { content: totalStoneAmt.toFixed(2), styles: { fontStyle: 'bold', halign: 'right' } }, // Assuming 2 decimals for amount total
               ]
           ],
     });
 
     doc.save(`receipt_${clientNameParam.replace(/\s+/g, '_')}_${format(date, 'yyyyMMdd')}.pdf`);
+    toast({ title: 'Success', description: 'Receipt downloaded.' });
   };
 
   const isNewReceipt = !existingReceiptId; // Determine if it's a new receipt based on state
@@ -468,10 +521,43 @@ function ReceiptDetailsContent() {
       <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-4 md:p-8">
         <Card className="w-full max-w-5xl"> {/* Increased max-width */}
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Client Receipt</CardTitle>
-             <CardDescription>
-               Client: {clientNameParam} {existingReceiptId ? `(ID: ${existingReceiptId})` : '(New Receipt)'}
-             </CardDescription>
+             <div className="flex justify-between items-center">
+                 <div>
+                    <CardTitle className="text-2xl">Client Receipt</CardTitle>
+                     <CardDescription>
+                       Client: {clientNameParam} {existingReceiptId ? `(ID: ${existingReceiptId})` : '(New Receipt)'}
+                     </CardDescription>
+                 </div>
+                 {/* Action Buttons based on mode */}
+                 <div className="flex justify-end gap-3">
+                    {!isEditMode && existingReceiptId ? ( // View mode for existing receipt
+                        <>
+                            <Button onClick={handleEditReceipt} variant="outline" size="sm">
+                                <Edit className="mr-2 h-4 w-4" /> Edit Receipt
+                            </Button>
+                            <Button onClick={downloadReceipt} variant="outline" size="sm">
+                                <Download className="mr-2 h-4 w-4" /> Download Receipt
+                            </Button>
+                        </>
+                    ) : isEditMode && existingReceiptId ? ( // Edit mode for existing receipt
+                         <>
+                             <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
+                                <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save Changes'}
+                             </Button>
+                             <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving} size="sm">
+                                 <XCircle className="mr-2 h-4 w-4" /> Cancel Edit
+                             </Button>
+                         </>
+                    ) : ( // New receipt mode (always edit mode)
+                         <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
+                            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Create Receipt'}
+                         </Button>
+                    )}
+                    <Button variant="secondary" onClick={() => router.back()} disabled={isSaving} size="sm">
+                        Back
+                    </Button>
+                </div>
+             </div>
           </CardHeader>
           <CardContent className="grid gap-6"> {/* Increased gap */}
             {/* Top Section: Date, Metal, Weight */}
@@ -484,7 +570,7 @@ function ReceiptDetailsContent() {
                       'w-full md:w-[240px] justify-start text-left font-normal', // Adjusted width
                       !date && 'text-muted-foreground'
                     )}
-                    disabled={!isEditMode}
+                    disabled={!isEditMode} // Disable in view mode
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {date ? format(date, 'PPP') : <span>Pick Issue Date</span>}
@@ -495,13 +581,13 @@ function ReceiptDetailsContent() {
                     mode="single"
                     selected={date}
                     onSelect={setDate}
-                    disabled={!isEditMode}
+                    disabled={!isEditMode} // Disable in view mode
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
 
-              <Select onValueChange={setMetal} value={metal} disabled={!isEditMode}>
+              <Select onValueChange={setMetal} value={metal} disabled={!isEditMode}> {/* Disable in view mode */}
                 <SelectTrigger className="w-full md:w-[200px]"> {/* Adjusted width */}
                   <SelectValue placeholder="Select Metal Type" />
                 </SelectTrigger>
@@ -513,17 +599,18 @@ function ReceiptDetailsContent() {
                 </SelectContent>
               </Select>
 
-               {/* Weight and Unit - Kept for display continuity, but not saved */}
+               {/* Weight and Unit - Enable/disable based on edit mode */}
               <div className="flex items-center space-x-2">
                  <Input
                    type="number"
                    placeholder="Overall Weight (Optional)"
                    value={weight}
                    onChange={(e) => setWeight(e.target.value)}
-                   disabled // Always disabled as it's not part of the schema
+                   disabled={!isEditMode} // Disable in view mode
                    className="flex-1"
+                   step="0.001"
                  />
-                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled>
+                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}> {/* Disable in view mode */}
                      <SelectTrigger className="w-[100px]">
                      <SelectValue placeholder="Unit" />
                    </SelectTrigger>
@@ -555,6 +642,7 @@ function ReceiptDetailsContent() {
                     <th className="p-2 border text-right text-sm">Melting/Touch (%)</th>
                     <th className="p-2 border text-right text-sm">Final (wt)</th>
                     <th className="p-2 border text-right text-sm">Stone Amt</th>
+                     {isEditMode && <th className="p-2 border text-center text-sm">Action</th>} {/* Show Action header only in edit mode */}
                   </tr>
                 </thead>
                 <tbody>
@@ -566,7 +654,7 @@ function ReceiptDetailsContent() {
                           type="text"
                           value={item.itemName}
                           onChange={(e) => handleInputChange(index, 'itemName', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                           className="text-sm h-8"
                           placeholder='Item name'
                         />
@@ -576,7 +664,7 @@ function ReceiptDetailsContent() {
                           type="text" // Assuming tag can be alphanumeric
                           value={item.tag}
                           onChange={(e) => handleInputChange(index, 'tag', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                            className="text-sm h-8"
                            placeholder='Tag'
                         />
@@ -586,7 +674,7 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.grossWt}
                           onChange={(e) => handleInputChange(index, 'grossWt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                           className="text-sm h-8 text-right"
                           step="0.001"
                           placeholder="0.000"
@@ -597,7 +685,7 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.stoneWt}
                           onChange={(e) => handleInputChange(index, 'stoneWt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                           className="text-sm h-8 text-right"
                           step="0.001"
                           placeholder="0.000"
@@ -605,14 +693,14 @@ function ReceiptDetailsContent() {
                       </td>
                       <td className="p-1 border text-right align-middle text-sm">
                            {/* Display calculated Net Wt */}
-                           {item.netWt}
+                           {(parseFloat(item.grossWt || '0') - parseFloat(item.stoneWt || '0')).toFixed(3)}
                       </td>
                        <td className="p-1 border align-middle">
                         <Input
                           type="number"
                           value={item.meltingTouch}
                           onChange={(e) => handleInputChange(index, 'meltingTouch', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                           className="text-sm h-8 text-right"
                           step="0.01"
                           placeholder="0.00"
@@ -620,19 +708,32 @@ function ReceiptDetailsContent() {
                       </td>
                       <td className="p-1 border text-right align-middle text-sm">
                            {/* Display calculated Final Wt */}
-                          {item.finalWt}
+                          {(( (parseFloat(item.grossWt || '0') - parseFloat(item.stoneWt || '0')) * parseFloat(item.meltingTouch || '0')) / 100).toFixed(3)}
                        </td>
                       <td className="p-1 border align-middle">
                         <Input
                           type="number"
                           value={item.stoneAmt}
                           onChange={(e) => handleInputChange(index, 'stoneAmt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode} // Disable in view mode
                           className="text-sm h-8 text-right"
                           step="0.01" // Assuming amount can have cents
                           placeholder="0.00"
                         />
                       </td>
+                      {isEditMode && ( // Show remove button only in edit mode
+                          <td className="p-1 border text-center align-middle">
+                              <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRemoveItem(index)}
+                                  disabled={items.length <= 1} // Disable if only one item
+                                  className="text-destructive hover:text-destructive/80 h-8 w-8" // Smaller icon button
+                              >
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                          </td>
+                      )}
                     </tr>
                   ))}
                   {/* Total Row */}
@@ -646,6 +747,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border"></td> {/* Melting/Touch doesn't usually have a total */}
                     <td className="p-2 border text-right text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td> {/* Assuming 2 decimals for amount */}
+                    {isEditMode && <td className="p-2 border"></td>} {/* Empty cell for action column total */}
                   </tr>
                 </tbody>
               </table>
@@ -656,106 +758,11 @@ function ReceiptDetailsContent() {
               )}
             </div>
 
+            {/* Action Buttons moved to CardHeader */}
 
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 mt-4">
-                {!isEditMode ? (
-                    <>
-                        <Button onClick={handleEditReceipt} disabled={isSaving}>Edit Receipt</Button>
-                        <Button onClick={downloadReceipt} variant="outline">
-                            <Download className="mr-2 h-4 w-4" /> Download Receipt
-                        </Button>
-                    </>
-                ) : (
-                     <Button onClick={handleSaveReceipt} disabled={isSaving}>
-                       {isSaving ? 'Saving...' : (existingReceiptId ? 'Save Changes' : 'Create Receipt')}
-                     </Button>
-                )}
-                {isEditMode && existingReceiptId && ( // Show Cancel button only when editing an existing receipt
-                    <Button variant="outline" onClick={() => {
-                         setIsEditMode(false);
-                         // Optionally refetch data to discard changes or rely on useEffect rerun
-                         fetchReceipt(); // Refetch to reset form
-                    }} disabled={isSaving}>
-                        Cancel Edit
-                    </Button>
-                )}
-                <Button variant="secondary" onClick={() => router.back()} disabled={isSaving}>
-                    Back
-                </Button>
-            </div>
-
-            {/* Summary Section (Removed - Download serves this purpose) */}
-             {/*
-             <div ref={summaryRef} className="mt-6 p-4 border rounded-md bg-card">
-                 <h3 className="text-xl font-semibold mb-3">Summary Preview</h3>
-                 <p><strong>Name:</strong> {clientNameParam}</p>
-                 <p><strong>Date:</strong> {date ? format(date, 'PPP') : 'N/A'}</p>
-                 <p><strong>Metals:</strong> {metal || 'N/A'}</p>
-                 <div className="overflow-x-auto mt-3">
-                     <table className="min-w-full border border-collapse border-border text-sm">
-                         <thead className="bg-muted">
-                         <tr>
-                             <th className="p-2 border">Item Name</th>
-                             <th className="p-2 border text-right">Gross (wt)</th>
-                             <th className="p-2 border text-right">Stone (wt)</th>
-                             <th className="p-2 border text-right">Net (wt)</th>
-                             <th className="p-2 border text-right">Final (wt)</th>
-                             <th className="p-2 border text-right">Stone Amt</th>
-                         </tr>
-                         </thead>
-                         <tbody>
-                         {items.filter(item => item.itemName || item.grossWt).map((item, index) => ( // Filter items for summary preview
-                             <tr key={`summary-${index}`}>
-                             <td className="p-2 border">{item.itemName}</td>
-                             <td className="p-2 border text-right">{parseFloat(item.grossWt || '0').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{parseFloat(item.stoneWt || '0').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{item.netWt}</td>
-                             <td className="p-2 border text-right">{item.finalWt}</td>
-                             <td className="p-2 border text-right">{parseFloat(item.stoneAmt || '0').toFixed(2)}</td>
-                             </tr>
-                         ))}
-                         <tr className="font-semibold bg-muted">
-                             <td className="p-2 border">Total</td>
-                             <td className="p-2 border text-right">{calculateTotal('grossWt').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{calculateTotal('stoneWt').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{calculateTotal('netWt').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{calculateTotal('finalWt').toFixed(3)}</td>
-                             <td className="p-2 border text-right">{calculateTotal('stoneAmt').toFixed(2)}</td>
-                         </tr>
-                         </tbody>
-                     </table>
-                 </div>
-             </div>
-            */}
           </CardContent>
         </Card>
       </div>
     </Layout>
   );
-}
-
-// Helper function to fetch receipt data (needed for cancel edit)
-async function fetchReceipt() {
-    const searchParams = useSearchParams();
-    const receiptId = searchParams.get('receiptId');
-    const clientId = searchParams.get('clientId');
-    const { toast } = useToast(); // Assuming useToast is accessible here or passed down
-
-    if (receiptId && clientId) {
-        // Simulate fetching logic inside the component's useEffect
-        // This is a placeholder - the actual fetch logic is within the main component's useEffect
-        console.log("Refetching receipt data for ID:", receiptId);
-        // In a real scenario, you'd call the actual fetch function here
-        // and update the state using the setters passed down or context.
-        // Example:
-        // const data = await getReceiptDataFromFirestore(receiptId);
-        // if (data) {
-        //     setDate(data.issueDate ? parseISO(data.issueDate) : new Date());
-        //     setMetal(data.metalType || '');
-        //     setItems(data.tableData || []);
-        // } else {
-        //    toast({ variant: "destructive", title: "Error", description: "Could not refetch receipt." });
-        // }
-    }
 }
