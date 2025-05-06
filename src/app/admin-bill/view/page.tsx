@@ -183,19 +183,19 @@ function AdminBillViewContent() {
         const headerColor = '#FFF8DC'; // Cornsilk (Light Yellow)
         const rowColor = '#FFFFFF'; // White
         const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige)
-        const titleFontSize = 18; // Adjusted font size
+        const titleFontSize = 18;
         const textFontSize = 10;
-        const companyFontSize = 12;
+        const companyFontSize = 16; // Increased company name font size
         const tableHeaderFontSize = 9;
         const tableBodyFontSize = 8;
         const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        let startY = margin + 20; // Initial Y position, adjusted for title
+        let startY = margin + 20; 
 
         // --- Border ---
         doc.setDrawColor(borderColor);
-        doc.setLineWidth(0.5); // Slightly thinner border
+        doc.setLineWidth(0.5);
         doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
 
         // --- Title ---
@@ -213,10 +213,6 @@ function AdminBillViewContent() {
         doc.setTextColor(primaryColor);
         doc.text(`Client Name: ${receiptData.clientName || 'N/A'}`, margin + 5, startY);
         startY += 6;
-        // Add client ID if needed
-        // doc.text(`Client ID: ${receiptData.clientId || 'N/A'}`, margin + 5, startY);
-        // startY += 6;
-
 
         // --- Given Section ---
         if (hasGiven && receiptData.given) {
@@ -238,7 +234,7 @@ function AdminBillViewContent() {
             const givenTotalRow = [
                 { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
                 { content: getDisplayValue(receiptData.given.totalPureWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
-                '', '', // Empty cells for Pure%, Melting
+                '', '', 
                 { content: getDisplayValue(receiptData.given.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
             ];
 
@@ -256,23 +252,21 @@ function AdminBillViewContent() {
                 tableLineWidth: 0.1,
                 margin: { left: margin + 5, right: margin + 5 },
                 didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5]; // Indices for numeric alignment
+                     const numericColumns = [2, 3, 4, 5]; 
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
-                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { // Ensure "Total" aligns right
+                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { 
                          data.cell.styles.halign = 'right';
                      }
                  },
-                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY after table
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } 
             });
-            // Use finalY from autoTable to set the next startY correctly
-             startY = (doc as any).lastAutoTable.finalY + 10; // Add spacing after the table
+             startY = (doc as any).lastAutoTable.finalY + 10; 
         }
 
         // --- Received Section ---
         if (hasReceived && receiptData.received) {
-             // Add vertical space if both sections exist
              if (hasGiven) startY += 5;
 
              const formattedReceivedDate = receivedDate && isValid(receivedDate) ? format(receivedDate, 'PPP') : 'N/A';
@@ -296,7 +290,7 @@ function AdminBillViewContent() {
                  { content: getDisplayValue(receiptData.received.totalOrnamentsWt, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalStoneWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalSubTotal, 3), styles: { fontStyle: 'bold', halign: 'right' } },
-                 '', // Empty cell for Making Charge %
+                 '', 
                  { content: getDisplayValue(receiptData.received.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
              ];
 
@@ -314,21 +308,21 @@ function AdminBillViewContent() {
                  tableLineWidth: 0.1,
                  margin: { left: margin + 5, right: margin + 5 },
                   didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5, 6]; // Indices for numeric alignment
+                     const numericColumns = [2, 3, 4, 5, 6]; 
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
-                      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { // Ensure "Total" aligns right
+                      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { 
                          data.cell.styles.halign = 'right';
                      }
                  },
-                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } 
             });
-             startY = (doc as any).lastAutoTable.finalY + 10; // Add spacing after the table
+             startY = (doc as any).lastAutoTable.finalY + 10; 
         }
 
         // --- Total Section ---
-        startY += 5; // Add space before Total section
+        startY += 5; 
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Total Summary', margin + 5, startY);
@@ -338,47 +332,54 @@ function AdminBillViewContent() {
         doc.setFont('helvetica', 'normal');
         const finalGivenTotal = parseFloat(givenTotalInput) || 0;
         const finalReceivedTotal = parseFloat(receivedTotalInput) || 0;
-        const finalResult = calculateResult(); // Use the calculated result from UI state
+        const finalResult = calculateResult(); 
         const operationText = operation === 'add' ? '+' : '-';
 
         autoTable(doc, {
            startY: startY,
-           theme: 'plain', // Simple theme for summary
+           theme: 'plain', 
            body: [
              ['Given Total:', getDisplayValue(finalGivenTotal, 3)],
-             [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)], // Show operation
-             ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }], // Bold result
+             [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)], 
+             ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }], 
            ],
            columnStyles: {
-             0: { halign: 'right', cellWidth: 40 }, // Label column
-             1: { halign: 'right', cellWidth: 40 }, // Value column
+             0: { halign: 'right', cellWidth: 40 }, 
+             1: { halign: 'right', cellWidth: 40 }, 
            },
-           margin: { left: pageWidth - margin - 5 - 80 }, // Align table to the right
-           tableWidth: 80, // Fixed width for the summary table
+           margin: { left: pageWidth - margin - 5 - 80 }, 
+           tableWidth: 80, 
            styles: { fontSize: textFontSize },
            didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
         });
-        // startY = (doc as any).lastAutoTable.finalY + 15; // Add more spacing after total summary
-        // Increased spacing for stamp/seal area
-        startY = (doc as any).lastAutoTable.finalY + 30;
-
+        
+        // --- Space for Seal ---
+        startY = (doc as any).lastAutoTable.finalY + (60 / doc.internal.scaleFactor); // Convert px to PDF units (approx)
 
         // --- Company Name ---
         doc.setFontSize(companyFontSize);
-        doc.setFont('helvetica', 'bolditalic');
-        doc.setTextColor(primaryColor); // Use primary text color
-        const companyName = 'ANTIQUES JEWELLERY MANUFACTURERS';
-        const companyNameWidth = doc.getTextWidth(companyName);
-        // Check if there's enough space, otherwise add a new page (optional)
-        if (startY > pageHeight - margin - 10) {
+        doc.setFont('helvetica', 'bold'); // Changed to bold
+        // doc.setFont('small-caps'); // jsPDF doesn't directly support small-caps with standard fonts
+        doc.setTextColor(primaryColor); 
+        
+        const companyNameLine1 = 'ANTIQUES';
+        const companyNameLine2 = 'JEWELLERY MANUFACTURERS';
+
+        const companyNameLine1Width = doc.getTextWidth(companyNameLine1);
+        const companyNameLine2Width = doc.getTextWidth(companyNameLine2);
+        
+        // Check if there's enough space, otherwise add a new page
+        if (startY + 12 > pageHeight - margin - 10) { // Adjusted for two lines
           doc.addPage();
-          startY = margin + 10; // Reset Y on new page
-           // Redraw border on new page if needed
+          startY = margin + 20; 
            doc.setDrawColor(borderColor);
            doc.setLineWidth(0.5);
            doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
         }
-        doc.text(companyName, (pageWidth - companyNameWidth) / 2, startY); // Center the company name
+        doc.text(companyNameLine1, (pageWidth - companyNameLine1Width) / 2, startY);
+        startY += (companyFontSize * 0.5); // Adjust line spacing
+        doc.text(companyNameLine2, (pageWidth - companyNameLine2Width) / 2, startY);
+
 
         // --- Save ---
         doc.save(`admin_receipt_${receiptData.clientName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`);
