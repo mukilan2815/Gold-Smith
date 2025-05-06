@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { ChangeEvent } from 'react';
@@ -185,13 +184,13 @@ function AdminBillViewContent() {
         const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige)
         const titleFontSize = 18;
         const textFontSize = 10;
-        const companyFontSize = 16; // Increased company name font size
+        const companyFontSize = 13; // Adjusted company name font size
         const tableHeaderFontSize = 9;
         const tableBodyFontSize = 8;
         const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        let startY = margin + 20; 
+        let startY = margin + 20;
 
         // --- Border ---
         doc.setDrawColor(borderColor);
@@ -234,7 +233,7 @@ function AdminBillViewContent() {
             const givenTotalRow = [
                 { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
                 { content: getDisplayValue(receiptData.given.totalPureWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
-                '', '', 
+                '', '',
                 { content: getDisplayValue(receiptData.given.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
             ];
 
@@ -252,17 +251,17 @@ function AdminBillViewContent() {
                 tableLineWidth: 0.1,
                 margin: { left: margin + 5, right: margin + 5 },
                 didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5]; 
+                     const numericColumns = [2, 3, 4, 5];
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
-                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { 
+                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) {
                          data.cell.styles.halign = 'right';
                      }
                  },
-                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } 
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
             });
-             startY = (doc as any).lastAutoTable.finalY + 10; 
+             startY = (doc as any).lastAutoTable.finalY + 10;
         }
 
         // --- Received Section ---
@@ -290,7 +289,7 @@ function AdminBillViewContent() {
                  { content: getDisplayValue(receiptData.received.totalOrnamentsWt, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalStoneWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalSubTotal, 3), styles: { fontStyle: 'bold', halign: 'right' } },
-                 '', 
+                 '',
                  { content: getDisplayValue(receiptData.received.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
              ];
 
@@ -308,21 +307,21 @@ function AdminBillViewContent() {
                  tableLineWidth: 0.1,
                  margin: { left: margin + 5, right: margin + 5 },
                   didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5, 6]; 
+                     const numericColumns = [2, 3, 4, 5, 6];
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
-                      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { 
+                      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) {
                          data.cell.styles.halign = 'right';
                      }
                  },
-                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } 
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
             });
-             startY = (doc as any).lastAutoTable.finalY + 10; 
+             startY = (doc as any).lastAutoTable.finalY + 10;
         }
 
         // --- Total Section ---
-        startY += 5; 
+        startY += 5;
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Total Summary', margin + 5, startY);
@@ -332,53 +331,65 @@ function AdminBillViewContent() {
         doc.setFont('helvetica', 'normal');
         const finalGivenTotal = parseFloat(givenTotalInput) || 0;
         const finalReceivedTotal = parseFloat(receivedTotalInput) || 0;
-        const finalResult = calculateResult(); 
+        const finalResult = calculateResult();
         const operationText = operation === 'add' ? '+' : '-';
 
         autoTable(doc, {
            startY: startY,
-           theme: 'plain', 
+           theme: 'plain',
            body: [
              ['Given Total:', getDisplayValue(finalGivenTotal, 3)],
-             [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)], 
-             ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }], 
+             [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)],
+             ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }],
            ],
            columnStyles: {
-             0: { halign: 'right', cellWidth: 40 }, 
-             1: { halign: 'right', cellWidth: 40 }, 
+             0: { halign: 'right', cellWidth: 40 },
+             1: { halign: 'right', cellWidth: 40 },
            },
-           margin: { left: pageWidth - margin - 5 - 80 }, 
-           tableWidth: 80, 
+           margin: { left: pageWidth - margin - 5 - 80 },
+           tableWidth: 80,
            styles: { fontSize: textFontSize },
            didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
         });
-        
-        // --- Space for Seal ---
-        startY = (doc as any).lastAutoTable.finalY + (60 / doc.internal.scaleFactor); // Convert px to PDF units (approx)
 
-        // --- Company Name ---
+        // --- Space for Seal ---
+        const sealSpace = 100 / doc.internal.scaleFactor; // Convert 100px to PDF units (approx)
+        let companyStartY = (doc as any).lastAutoTable.finalY + sealSpace;
+
+        // --- Company Name (Footer) ---
         doc.setFontSize(companyFontSize);
-        doc.setFont('helvetica', 'bold'); // Changed to bold
-        // doc.setFont('small-caps'); // jsPDF doesn't directly support small-caps with standard fonts
-        doc.setTextColor(primaryColor); 
-        
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(primaryColor);
+
         const companyNameLine1 = 'ANTIQUES';
         const companyNameLine2 = 'JEWELLERY MANUFACTURERS';
+        const companyLineHeight = companyFontSize * 0.5; // Compact line spacing
 
-        const companyNameLine1Width = doc.getTextWidth(companyNameLine1);
-        const companyNameLine2Width = doc.getTextWidth(companyNameLine2);
-        
-        // Check if there's enough space, otherwise add a new page
-        if (startY + 12 > pageHeight - margin - 10) { // Adjusted for two lines
-          doc.addPage();
-          startY = margin + 20; 
-           doc.setDrawColor(borderColor);
-           doc.setLineWidth(0.5);
-           doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
-        }
-        doc.text(companyNameLine1, (pageWidth - companyNameLine1Width) / 2, startY);
-        startY += (companyFontSize * 0.5); // Adjust line spacing
-        doc.text(companyNameLine2, (pageWidth - companyNameLine2Width) / 2, startY);
+        // Function to add company name, checking for page overflow
+        const addCompanyName = (currentY: number) => {
+            let yPos = currentY;
+            // Check if text fits on current page, considering bottom margin and padding
+            if (yPos + companyLineHeight * 2 > pageHeight - margin - 30) {
+                doc.addPage();
+                yPos = margin + 20; // Reset Y for new page
+                // Re-draw border on new page
+                doc.setDrawColor(borderColor);
+                doc.setLineWidth(0.5);
+                doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
+            }
+            // Position at bottom-right with padding
+            const textX = pageWidth - margin - 40; // 40px from right
+            let textY = pageHeight - margin - 30 - companyLineHeight; // 30px from bottom, adjust for second line
+
+            // Draw text, aligning right
+            doc.text(companyNameLine2, textX, textY, { align: 'right' });
+            textY -= companyLineHeight * 1.2; // Move up for the first line
+            doc.text(companyNameLine1, textX, textY, { align: 'right' });
+
+            return yPos; // Return the Y position after drawing (or new page Y)
+        };
+
+        companyStartY = addCompanyName(companyStartY);
 
 
         // --- Save ---
@@ -524,7 +535,7 @@ function AdminBillViewContent() {
                     </thead>
                     <tbody>
                        {/* Add null check for receiptData.received.items */}
-                        {receiptData.received?.items?.map((item, index) => ( // Use nullish coalescing
+                        {receiptData.received?.items?.map((item, index) => (
                            <tr key={`received-${index}`}> {/* Add unique key prefix */}
                               <td className="p-2 border">{index + 1}</td>
                               <td className="p-2 border">{item.productName}</td>
