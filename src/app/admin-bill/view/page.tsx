@@ -358,7 +358,10 @@ function AdminBillViewContent() {
            styles: { fontSize: textFontSize },
            didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
         });
-        startY = (doc as any).lastAutoTable.finalY + 15; // Add more spacing after total summary
+        // startY = (doc as any).lastAutoTable.finalY + 15; // Add more spacing after total summary
+        // Increased spacing for stamp/seal area
+        startY = (doc as any).lastAutoTable.finalY + 30;
+
 
         // --- Company Name ---
         doc.setFontSize(companyFontSize);
