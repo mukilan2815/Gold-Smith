@@ -19,6 +19,7 @@ export default function NewClientPage() {
   );
 }
 
+
 function NewClientContent() {
   const [shopName, setShopName] = useState('');
   const [clientName, setClientName] = useState('');
@@ -28,8 +29,6 @@ function NewClientContent() {
   const { toast } = useToast();
 
   const handleSaveClient = async () => {
-    // console.log('Attempting to save client...'); // Debug log
-
     // Basic client-side validation
     if (
       !shopName.trim() ||
@@ -42,12 +41,10 @@ function NewClientContent() {
         title: 'Validation Error',
         description: 'Please fill in all fields.',
       });
-      // console.log('Validation failed.'); // Debug log
       return;
     }
 
     setIsSaving(true);
-    // console.log('Saving state set to true.'); // Debug log
 
     try {
       const newClient = {
@@ -58,15 +55,14 @@ function NewClientContent() {
         createdAt: serverTimestamp(), // Use server timestamp for consistency
       };
 
-      // console.log('Client data prepared:', newClient); // Debug log
-
-      // Add document to Firestore
+      // Add document to Firestore 'Clients' collection
+      // This operation's speed heavily depends on network and Firebase backend status.
       const docRef = await addDoc(collection(db, 'Clients'), newClient);
-      // console.log('Client added with ID:', docRef.id); // Debug log
+      // console.log('Client added with ID:', docRef.id); // Optional: for debugging
 
       toast({
         title: 'Client Saved!',
-        description: `${clientName}'s details saved successfully.`, // Simplified message
+        description: `${clientName}'s details saved successfully.`,
       });
 
       // Reset form fields after successful save
@@ -74,19 +70,17 @@ function NewClientContent() {
       setClientName('');
       setPhoneNumber('');
       setAddress('');
-      // console.log('Form cleared.'); // Debug log
 
-    } catch (error: any) { // Catch specific error type if possible
-      console.error("Error adding client to Firestore: ", error); // Log the full error
+    } catch (error: any) {
+      console.error("Error adding client to Firestore: ", error);
       toast({
         variant: 'destructive',
         title: 'Save Error',
-        description: `Could not save client details. Please check your connection and try again. Error: ${error.message || 'Unknown error'}`, // Show error message
+        description: `Could not save client details. Please check your network connection and Firebase status. Error: ${error.message || 'Unknown error'}`,
       });
     } finally {
       // Ensure saving state is reset regardless of success or failure
       setIsSaving(false);
-      // console.log('Saving state set to false.'); // Debug log
     }
   };
 
