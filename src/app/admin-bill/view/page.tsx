@@ -185,12 +185,13 @@ function AdminBillViewContent() {
         const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige)
         const titleFontSize = 18; // Adjusted font size
         const textFontSize = 10;
+        const companyFontSize = 12;
         const tableHeaderFontSize = 9;
         const tableBodyFontSize = 8;
         const margin = 10;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        let startY = margin + 20; // Initial Y position
+        let startY = margin + 20; // Initial Y position, adjusted for title
 
         // --- Border ---
         doc.setDrawColor(borderColor);
@@ -212,6 +213,10 @@ function AdminBillViewContent() {
         doc.setTextColor(primaryColor);
         doc.text(`Client Name: ${receiptData.clientName || 'N/A'}`, margin + 5, startY);
         startY += 6;
+        // Add client ID if needed
+        // doc.text(`Client ID: ${receiptData.clientId || 'N/A'}`, margin + 5, startY);
+        // startY += 6;
+
 
         // --- Given Section ---
         if (hasGiven && receiptData.given) {
@@ -261,11 +266,15 @@ function AdminBillViewContent() {
                  },
                  didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY after table
             });
-            startY += 5; // Add spacing after the table
+            // Use finalY from autoTable to set the next startY correctly
+             startY = (doc as any).lastAutoTable.finalY + 10; // Add spacing after the table
         }
 
         // --- Received Section ---
         if (hasReceived && receiptData.received) {
+             // Add vertical space if both sections exist
+             if (hasGiven) startY += 5;
+
              const formattedReceivedDate = receivedDate && isValid(receivedDate) ? format(receivedDate, 'PPP') : 'N/A';
              doc.setFontSize(12);
              doc.setFont('helvetica', 'bold');
@@ -315,10 +324,11 @@ function AdminBillViewContent() {
                  },
                  didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY
             });
-            startY += 5; // Add spacing after the table
+             startY = (doc as any).lastAutoTable.finalY + 10; // Add spacing after the table
         }
 
         // --- Total Section ---
+        startY += 5; // Add space before Total section
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('Total Summary', margin + 5, startY);
@@ -348,6 +358,24 @@ function AdminBillViewContent() {
            styles: { fontSize: textFontSize },
            didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
         });
+        startY = (doc as any).lastAutoTable.finalY + 15; // Add more spacing after total summary
+
+        // --- Company Name ---
+        doc.setFontSize(companyFontSize);
+        doc.setFont('helvetica', 'bolditalic');
+        doc.setTextColor(primaryColor); // Use primary text color
+        const companyName = 'ANTIQUES JEWELLERY MANUFACTURERS';
+        const companyNameWidth = doc.getTextWidth(companyName);
+        // Check if there's enough space, otherwise add a new page (optional)
+        if (startY > pageHeight - margin - 10) {
+          doc.addPage();
+          startY = margin + 10; // Reset Y on new page
+           // Redraw border on new page if needed
+           doc.setDrawColor(borderColor);
+           doc.setLineWidth(0.5);
+           doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
+        }
+        doc.text(companyName, (pageWidth - companyNameWidth) / 2, startY); // Center the company name
 
         // --- Save ---
         doc.save(`admin_receipt_${receiptData.clientName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`);
