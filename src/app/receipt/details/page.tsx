@@ -77,12 +77,12 @@ function ReceiptDetailsContent() {
   const [weight, setWeight] = useState(''); // Overall weight - Not saved in current schema
   const [weightUnit, setWeightUnit] = useState(''); // Overall weight unit - Not saved in current schema
   const [items, setItems] = useState<ReceiptItem[]>([
-    { itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' },
+    { sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '', meltingTouch: '', finalWt: '', stoneAmt: '' },
   ]);
   const [initialState, setInitialState] = useState<{ date?: Date, metal: string, weight: string, weightUnit: string, items: ReceiptItem[] } | null>(null); // For cancel edit
 
   // State for managing edit mode and loading
-  const [isEditMode, setIsEditMode] = useState(!receiptIdParam); // Start in edit mode if creating new
+  const [isEditMode, setIsEditMode] = useState(true); // Default to true (edit mode), set to false after loading existing
   const [isLoading, setIsLoading] = useState(!!receiptIdParam); // Loading if editing
   const [isSaving, setIsSaving] = useState(false);
   const [existingReceiptId, setExistingReceiptId] = useState<string | null>(receiptIdParam);
@@ -132,27 +132,28 @@ function ReceiptDetailsContent() {
           setWeightUnit(loadedWeightUnit);
           setItems(loadedItems);
           // Store initial state for cancel
-          setInitialState({ date: loadedDate, metal: loadedMetal, weight: loadedWeight, weightUnit: loadedWeightUnit, items: loadedItems });
+          const initialStateData = { date: loadedDate, metal: loadedMetal, weight: loadedWeight, weightUnit: loadedWeightUnit, items: loadedItems };
+          setInitialState(initialStateData);
           setIsEditMode(false); // Start in view mode when loading existing
         } else {
           toast({ variant: "destructive", title: "Not Found", description: "Receipt not found. Creating new." });
           setExistingReceiptId(null); // Treat as new
           resetToNewReceiptState();
-          setIsEditMode(true);
+          setIsEditMode(true); // Ensure edit mode for new
         }
       } catch (error) {
         console.error("Error fetching receipt:", error);
         toast({ variant: "destructive", title: "Error", description: "Could not load receipt details." });
         setExistingReceiptId(null); // Treat as new on error
         resetToNewReceiptState();
-        setIsEditMode(true);
+        setIsEditMode(true); // Ensure edit mode for new
       } finally {
         setIsLoading(false);
       }
     } else {
       // Creating a new receipt
       resetToNewReceiptState();
-      setIsEditMode(true);
+      setIsEditMode(true); // Ensure edit mode for new
       setIsLoading(false);
     }
   };
@@ -319,7 +320,8 @@ function ReceiptDetailsContent() {
         });
         toast({ title: 'Receipt Updated!', description: 'The receipt has been updated successfully.' });
         // Update initial state to current saved state after successful update
-        setInitialState({ date, metal, weight, weightUnit, items });
+        const updatedInitialState = { date, metal, weight, weightUnit, items };
+        setInitialState(updatedInitialState);
       } else {
         // Create new receipt
         const docRef = await addDoc(collection(db, 'ClientReceipts'), {
@@ -332,7 +334,8 @@ function ReceiptDetailsContent() {
          router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${docRef.id}`, undefined);
          toast({ title: 'Receipt Created!', description: 'The receipt has been saved successfully.' });
          // Set initial state after successful creation
-         setInitialState({ date, metal, weight, weightUnit, items });
+         const createdInitialState = { date, metal, weight, weightUnit, items };
+         setInitialState(createdInitialState);
       }
       setIsEditMode(false); // Exit edit mode after save/update
        // Optionally redirect to the bill page after saving
@@ -351,7 +354,17 @@ function ReceiptDetailsContent() {
         toast({ variant: "destructive", title: "Error", description: "Cannot download receipt without a date." });
         return;
     }
-    if (items.length === 0 || items.every(item => !item.itemName && !item.grossWt)) {
+     // Use filtered items for PDF download
+    const validItems = items.filter(item =>
+        item.itemName.trim() !== '' ||
+        item.tag.trim() !== '' ||
+        item.grossWt.trim() !== '' ||
+        item.stoneWt.trim() !== '' ||
+        item.meltingTouch.trim() !== '' ||
+        item.stoneAmt.trim() !== ''
+    );
+
+    if (validItems.length === 0) {
         toast({ variant: "destructive", title: "Error", description: "Cannot download an empty receipt." });
         return;
     }
@@ -360,11 +373,11 @@ function ReceiptDetailsContent() {
 
     // --- Styling ---
     const primaryColor = '#000000'; // Black for text
-    const backgroundColor = '#FFFFFF'; // White background
-    const borderColor = '#D4AF37'; // Gold-like border color (adjust as needed) gold: #FFD700, dark gold: #B8860B
-    const headerColor = '#F5F5F5'; // Light grey for header background
+    const borderColor = '#B8860B'; // Dark Gold
+    const headerColor = '#FFF8DC'; // Cornsilk (Light Yellow)
+    const rowColor = '#FFFFFF'; // White
+    const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige)
     const titleFontSize = 20;
-    const headingFontSize = 14;
     const textFontSize = 10;
     const tableHeaderFontSize = 10;
     const tableBodyFontSize = 9;
@@ -377,23 +390,17 @@ function ReceiptDetailsContent() {
     doc.setLineWidth(1);
     doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
 
-    // --- Background ---
-    // Removing fill to keep it white
-    // doc.setFillColor(backgroundColor);
-    // doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin, 'F');
-
     // --- Title ---
     doc.setFontSize(titleFontSize);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(primaryColor); // Keep title black
+    doc.setTextColor(primaryColor);
     const title = 'Goldsmith Receipt';
     const titleWidth = doc.getTextWidth(title);
-    const titleX = (pageWidth - titleWidth) / 2; // Center align
-    doc.text(title, titleX, margin + 10);
+    doc.text(title, (pageWidth - titleWidth) / 2, margin + 10);
 
     // --- Client Details ---
     doc.setFontSize(textFontSize);
-    doc.setFont('helvetica', 'normal'); // Regular font for details
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(primaryColor);
     let startY = margin + 25;
     doc.text(`Name: ${clientNameParam}`, margin + 5, startY);
@@ -402,99 +409,92 @@ function ReceiptDetailsContent() {
     startY += 6;
     doc.text(`Metals: ${metal || 'N/A'}`, margin + 5, startY);
     startY += 6;
-    // Weight and Unit are not part of the saved schema, only show if entered in UI (optional)
     if (weight && weightUnit) {
         doc.text(`Weight: ${weight} ${weightUnit}`, margin + 5, startY);
         startY += 6;
     }
 
-
     // --- Table ---
-    const tableColumn = ['Item Name', 'Tag', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Melting/Touch', 'Final (wt)', 'Stone Amt'];
-    const tableRows = items.map((item) => [
+    const tableColumn = ['Item Name', 'Tag', 'Gross (wt)', 'Stone (wt)', 'Net (wt)', 'Melting/Touch (%)', 'Final (wt)', 'Stone Amt'];
+    const tableRows = validItems.map((item) => [
       item.itemName || '',
       item.tag || '',
-      item.grossWt ? parseFloat(item.grossWt).toFixed(3) : '', // Keep empty if 0 or NaN
-      item.stoneWt ? parseFloat(item.stoneWt).toFixed(3) : '',
-      item.netWt ? parseFloat(item.netWt).toFixed(3) : '',
-      item.meltingTouch ? parseFloat(item.meltingTouch).toFixed(2) : '', // Assuming 2 decimals for melting
-      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '',
-      item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '', // Assuming 2 decimals for amount
+      item.grossWt ? parseFloat(item.grossWt).toFixed(3) : '0.000',
+      item.stoneWt ? parseFloat(item.stoneWt).toFixed(3) : '0.000',
+      item.netWt ? parseFloat(item.netWt).toFixed(3) : '0.000',
+      item.meltingTouch ? parseFloat(item.meltingTouch).toFixed(2) : '0.00',
+      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '0.000',
+      item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '0.00',
     ]);
 
-     // Calculate totals again for the PDF
-     const totalGrossWt = calculateTotal('grossWt');
-     const totalStoneWt = calculateTotal('stoneWt');
-     const totalNetWt = calculateTotal('netWt');
-     const totalFinalWt = calculateTotal('finalWt');
-     const totalStoneAmt = calculateTotal('stoneAmt');
-
+     // Calculate totals based on validItems for the PDF
+     const totalGrossWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.grossWt) || 0), 0);
+     const totalStoneWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneWt) || 0), 0);
+     const totalNetWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.netWt) || 0), 0);
+     const totalFinalWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.finalWt) || 0), 0);
+     const totalStoneAmtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneAmt) || 0), 0);
 
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: startY + 5, // Add some space before the table
-        theme: 'grid', // Use grid theme for clear borders
+        startY: startY + 5,
+        theme: 'grid',
         headStyles: {
-            fillColor: headerColor, // Light grey header remains
-            textColor: primaryColor, // Black header text
+            fillColor: headerColor,
+            textColor: primaryColor,
             fontStyle: 'bold',
             fontSize: tableHeaderFontSize,
             lineWidth: 0.1,
-            lineColor: [180, 180, 180], // Grey lines
-            halign: 'center' // Center align header text
+            lineColor: borderColor, // Use border color for lines
+            halign: 'center'
         },
         bodyStyles: {
-            textColor: primaryColor, // Black body text
+            fillColor: rowColor,
+            textColor: primaryColor,
             fontSize: tableBodyFontSize,
             lineWidth: 0.1,
-            lineColor: [180, 180, 180],
-            cellPadding: 1.5, // Adjust cell padding
+            lineColor: borderColor,
+            cellPadding: 1.5,
         },
         alternateRowStyles: {
-            fillColor: [248, 248, 248], // Very light grey for alternate rows
+            fillColor: alternateRowColor,
         },
-        footStyles: { // Style the total row
-            fillColor: headerColor, // Match header background
-            textColor: primaryColor, // Black total text
+        footStyles: {
+            fillColor: headerColor,
+            textColor: primaryColor,
             fontStyle: 'bold',
             fontSize: tableHeaderFontSize,
             lineWidth: 0.1,
-            lineColor: [180, 180, 180],
-            halign: 'right' // Right align totals by default (can be overridden per cell)
+            lineColor: borderColor,
+            halign: 'right'
         },
-        tableLineColor: [150, 150, 150],
+        tableLineColor: borderColor,
         tableLineWidth: 0.1,
-        margin: { left: margin + 5, right: margin + 5 }, // Adjust table margins
-         didParseCell: function (data) {
-             // Right align numeric columns in the body
-             const numericColumns = [2, 3, 4, 5, 6, 7]; // Indices of numeric columns (0-based)
+        margin: { left: margin + 5, right: margin + 5 },
+        didParseCell: function (data) {
+             const numericColumns = [2, 3, 4, 5, 6, 7];
              if (data.section === 'body' && numericColumns.includes(data.column.index)) {
                  data.cell.styles.halign = 'right';
              }
-             // Ensure "Total" label in the footer aligns right if not already specified
              if (data.section === 'foot' && data.column.index === 0) {
-                  if (typeof data.cell.content === 'string' && data.cell.content === 'Total') {
+                 if (typeof data.cell.content === 'string' && data.cell.content === 'Total') {
                      data.cell.styles.halign = 'right';
-                  }
+                 }
              }
-             // Right align numeric totals in the footer
-              if (data.section === 'foot' && numericColumns.includes(data.column.index)) {
+             if (data.section === 'foot' && numericColumns.includes(data.column.index)) {
                  data.cell.styles.halign = 'right';
              }
          },
-          // Add the total row as the foot
-         showFoot: 'lastPage', // Show footer only on the last page if table spans multiple pages
-         foot: [ // Define the content for the footer row
+         showFoot: 'lastPage',
+         foot: [
               [
-                  { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } }, // Span 'Total' across first 2 columns
-                  //'', // Skip Tag column in footer - handled by colSpan
-                  { content: totalGrossWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-                  { content: totalStoneWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-                  { content: totalNetWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-                  '', // Skip Melting/Touch column
-                  { content: totalFinalWt.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
-                  { content: totalStoneAmt.toFixed(2), styles: { fontStyle: 'bold', halign: 'right' } }, // Assuming 2 decimals for amount total
+                  { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+                  { content: totalGrossWtPdf.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
+                  { content: totalStoneWtPdf.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
+                  { content: totalNetWtPdf.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
+                  '', // Skip Melting/Touch
+                  { content: totalFinalWtPdf.toFixed(3), styles: { fontStyle: 'bold', halign: 'right' } },
+                  { content: totalStoneAmtPdf.toFixed(2), styles: { fontStyle: 'bold', halign: 'right' } },
               ]
           ],
     });
@@ -606,11 +606,11 @@ function ReceiptDetailsContent() {
                    placeholder="Overall Weight (Optional)"
                    value={weight}
                    onChange={(e) => setWeight(e.target.value)}
-                   disabled={!isEditMode} // Disable in view mode
+                   disabled={!isEditMode} // Enable/disable based on edit mode
                    className="flex-1"
                    step="0.001"
                  />
-                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}> {/* Disable in view mode */}
+                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}> {/* Enable/disable based on edit mode */}
                      <SelectTrigger className="w-[100px]">
                      <SelectValue placeholder="Unit" />
                    </SelectTrigger>
