@@ -4,7 +4,7 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { format, isValid } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { CalendarIcon, PlusCircle, Trash2 } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -20,38 +20,53 @@ import { cn } from '@/lib/utils';
 import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-// --- Interfaces ---
+// --- Interfaces matching the new Firestore structure ---
 interface GivenItem {
-  id: string;
+  id: string; // Keep for UI key management, remove before saving
   productName: string;
   pureWeight: string;
   purePercent: string;
   melting: string;
-  total: number;
+  total: number; // Calculated
 }
 
 interface ReceivedItem {
-  id: string;
+  id: string; // Keep for UI key management, remove before saving
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  subTotal: number;
-  makingChargePercent: string;
-  total: number;
+  makingChargePercent: string; // Renamed from makingCharge
+  subTotal: number; // Calculated
+  total: number; // Calculated
+}
+
+interface GivenData {
+    date: string | null; // Store as ISO string or null
+    items: Omit<GivenItem, 'id'>[]; // Store items without UI id
+    totalPureWeight: number;
+    total: number; // Sum of item totals
+}
+
+interface ReceivedData {
+    date: string | null; // Store as ISO string or null
+    items: Omit<ReceivedItem, 'id'>[]; // Store items without UI id
+    totalOrnamentsWt: number;
+    totalStoneWeight: number; // Added for consistency
+    totalSubTotal: number;
+    total: number; // Sum of item totals
 }
 
 // Firestore Document Structure for AdminReceipts
 interface AdminReceiptData {
-  id?: string; // Firestore document ID (optional on create)
   clientId: string;
   clientName: string;
-  dateGiven: string | null; // Store as ISO string or null
-  given: GivenItem[];
-  dateReceived: string | null; // Store as ISO string or null
-  received: ReceivedItem[] | null; // Allow null if not yet received
-  createdAt?: Timestamp; // Firestore timestamp
-  updatedAt?: Timestamp; // Firestore timestamp
+  given: GivenData | null;
+  received: ReceivedData | null;
+  status: 'complete' | 'incomplete' | 'empty'; // Added status
+  createdAt: Timestamp; // Firestore timestamp
+  updatedAt: Timestamp; // Firestore timestamp
 }
+
 
 // --- Helper Functions ---
 const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -75,6 +90,10 @@ const calculateReceivedSubTotal = (item: ReceivedItem): number => {
 const calculateReceivedTotal = (item: ReceivedItem): number => {
   const subTotal = calculateReceivedSubTotal(item);
   const makingChargePercent = parseFloat(item.makingChargePercent) || 0;
+  // Corrected calculation: Total is making charge value, not final weight
+  // Assuming 'Total' here means the additional charge calculation, not the final total weight.
+  // If Total means final weight + making charge value, adjust accordingly.
+  // Let's assume Total = SubTotal * (MakingCharge% / 100) as per original user request interpretation
   const total = subTotal * (makingChargePercent / 100);
   return parseFloat(total.toFixed(3));
 };
@@ -95,7 +114,7 @@ function AdminReceiptDetailsContent() {
 
   const clientId = searchParams.get('clientId');
   const clientName = searchParams.get('clientName') || 'Client';
-  const receiptId = searchParams.get('receiptId'); // For editing existing receipts
+  const receiptIdParam = searchParams.get('receiptId'); // For editing existing receipts
 
   const [dateGiven, setDateGiven] = useState<Date | undefined>(undefined);
   const [dateReceived, setDateReceived] = useState<Date | undefined>(undefined);
@@ -106,7 +125,7 @@ function AdminReceiptDetailsContent() {
   const [manualOperation, setManualOperation] = useState<'add' | 'subtract'>('subtract');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [currentReceiptId, setCurrentReceiptId] = useState<string | null>(receiptId); // Use state to manage receipt ID
+  const [currentReceiptId, setCurrentReceiptId] = useState<string | null>(receiptIdParam); // Use state to manage receipt ID
 
   // --- Fetch Existing Data from Firestore ---
   useEffect(() => {
@@ -118,11 +137,25 @@ function AdminReceiptDetailsContent() {
           const docSnap = await getDoc(receiptRef);
 
           if (docSnap.exists()) {
-            const data = docSnap.data() as AdminReceiptData;
-            setDateGiven(data.dateGiven && isValid(new Date(data.dateGiven)) ? new Date(data.dateGiven) : undefined);
-            setGivenItems(data.given && data.given.length > 0 ? data.given : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            setDateReceived(data.dateReceived && isValid(new Date(data.dateReceived)) ? new Date(data.dateReceived) : undefined);
-            setReceivedItems(data.received && data.received.length > 0 ? data.received : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+            const data = docSnap.data() as AdminReceiptData; // Cast to new interface
+            // Load Given data
+            if (data.given) {
+              setDateGiven(data.given.date && isValid(parseISO(data.given.date)) ? parseISO(data.given.date) : undefined);
+              // Add back UI 'id' to items
+              setGivenItems(data.given.items && data.given.items.length > 0 ? data.given.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+            } else {
+              setDateGiven(undefined);
+              setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+            }
+            // Load Received data
+            if (data.received) {
+                setDateReceived(data.received.date && isValid(parseISO(data.received.date)) ? parseISO(data.received.date) : undefined);
+                // Add back UI 'id' to items
+                setReceivedItems(data.received.items && data.received.items.length > 0 ? data.received.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+            } else {
+               setDateReceived(undefined);
+               setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+            }
           } else {
             console.warn(`Receipt document ${currentReceiptId} not found. Starting new.`);
             toast({ variant: "default", title: "New Receipt", description: "Creating a new admin receipt." });
@@ -155,7 +188,8 @@ function AdminReceiptDetailsContent() {
     };
 
     fetchReceiptData();
-  }, [clientId, receiptId, router, toast]); // Depend on original receiptId from params
+  }, [clientId, receiptIdParam, router, toast]); // Depend on original receiptId from params
+
 
   // --- Event Handlers ---
    const handleInputChange = <T extends GivenItem | ReceivedItem>(
@@ -213,19 +247,23 @@ function AdminReceiptDetailsContent() {
     }
 
     // Filter out rows where all relevant input fields are empty
-     const finalGivenItems = givenItems.filter(item =>
-        item.productName.trim() !== '' ||
-        item.pureWeight.trim() !== '' ||
-        item.purePercent.trim() !== '' ||
-        item.melting.trim() !== ''
-    );
+     const finalGivenItems = givenItems
+       .filter(item =>
+         item.productName.trim() !== '' ||
+         item.pureWeight.trim() !== '' ||
+         item.purePercent.trim() !== '' ||
+         item.melting.trim() !== ''
+       )
+       .map(({ id, ...rest }) => rest); // Remove UI id
 
-     const finalReceivedItems = receivedItems.filter(item =>
-        item.productName.trim() !== '' ||
-        item.finalOrnamentsWt.trim() !== '' ||
-        item.stoneWeight.trim() !== '' ||
-        item.makingChargePercent.trim() !== ''
-    );
+     const finalReceivedItems = receivedItems
+       .filter(item =>
+         item.productName.trim() !== '' ||
+         item.finalOrnamentsWt.trim() !== '' ||
+         item.stoneWeight.trim() !== '' ||
+         item.makingChargePercent.trim() !== ''
+       )
+       .map(({ id, ...rest }) => rest); // Remove UI id
 
     const hasGivenData = finalGivenItems.length > 0;
     const hasReceivedData = finalReceivedItems.length > 0;
@@ -240,11 +278,6 @@ function AdminReceiptDetailsContent() {
       return;
     }
 
-    // Validate that at least one tab has data if creating a new receipt
-    if (!currentReceiptId && !hasGivenData && !hasReceivedData) {
-        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for either Given or Received items before saving.' });
-        return;
-    }
     // Validate that the current tab being saved has data
      if (saveType === 'given' && !hasGivenData) {
        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Given" items before saving this section.' });
@@ -258,21 +291,53 @@ function AdminReceiptDetailsContent() {
 
     setIsSaving(true);
 
-    // Prepare the data object based on Firestore structure
-    const dataToSave: Partial<AdminReceiptData> = {
-      clientId,
-      clientName,
-      updatedAt: serverTimestamp(), // Always update timestamp
+     // Calculate totals based on filtered items
+    const totalGivenPureWeightCalc = finalGivenItems.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
+    const totalGivenTotalCalc = finalGivenItems.reduce((sum, item) => sum + item.total, 0);
+
+    const totalReceivedFinalOrnamentsWtCalc = finalReceivedItems.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0);
+    const totalReceivedStoneWeightCalc = finalReceivedItems.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0);
+    const totalReceivedSubTotalCalc = finalReceivedItems.reduce((sum, item) => sum + item.subTotal, 0);
+    const totalReceivedTotalCalc = finalReceivedItems.reduce((sum, item) => sum + item.total, 0);
+
+    // Prepare the data object based on the new Firestore structure
+    const updateData: Partial<Omit<AdminReceiptData, 'createdAt' | 'clientId' | 'clientName'>> & { updatedAt: any } = {
+       updatedAt: serverTimestamp(), // Always update timestamp
     };
 
-    // Include data from the tab being saved
+    let newGivenData: GivenData | null = null;
+    let newReceivedData: ReceivedData | null = null;
+
     if (saveType === 'given') {
-      dataToSave.dateGiven = hasGivenData && dateGiven ? dateGiven.toISOString() : null;
-      dataToSave.given = hasGivenData ? finalGivenItems : []; // Save empty array if cleared
+      if (hasGivenData) {
+        newGivenData = {
+          date: dateGiven ? dateGiven.toISOString() : null,
+          items: finalGivenItems,
+          totalPureWeight: parseFloat(totalGivenPureWeightCalc.toFixed(3)),
+          total: parseFloat(totalGivenTotalCalc.toFixed(3)),
+        };
+        updateData.given = newGivenData;
+      } else {
+          updateData.given = null; // Explicitly set to null if cleared
+      }
     } else { // saveType === 'received'
-      dataToSave.dateReceived = hasReceivedData && dateReceived ? dateReceived.toISOString() : null;
-      dataToSave.received = hasReceivedData ? finalReceivedItems : []; // Save empty array if cleared, null if never entered
+       if (hasReceivedData) {
+        newReceivedData = {
+          date: dateReceived ? dateReceived.toISOString() : null,
+          items: finalReceivedItems,
+          totalOrnamentsWt: parseFloat(totalReceivedFinalOrnamentsWtCalc.toFixed(3)),
+          totalStoneWeight: parseFloat(totalReceivedStoneWeightCalc.toFixed(3)),
+          totalSubTotal: parseFloat(totalReceivedSubTotalCalc.toFixed(3)),
+          total: parseFloat(totalReceivedTotalCalc.toFixed(3)),
+        };
+        updateData.received = newReceivedData;
+      } else {
+          updateData.received = null; // Explicitly set to null if cleared
+      }
     }
+
+    // Determine status based on the data *being saved* and potentially *existing* data
+    let finalStatus: 'complete' | 'incomplete' | 'empty' = 'empty';
 
 
     try {
@@ -282,60 +347,73 @@ function AdminReceiptDetailsContent() {
       if (tempCurrentReceiptId) {
         // --- Updating Existing Receipt ---
         docRef = doc(db, 'AdminReceipts', tempCurrentReceiptId);
-
-        // Fetch existing data to merge correctly, preserving the *other* tab's data
         const existingDocSnap = await getDoc(docRef);
-        if (existingDocSnap.exists()) {
-          const existingData = existingDocSnap.data() as AdminReceiptData;
 
-          // If saving 'received', preserve existing 'given' data unless explicitly saving 'given' now
-          if (saveType === 'received' && !dataToSave.given && existingData.given !== undefined) {
-            dataToSave.given = existingData.given;
-            dataToSave.dateGiven = existingData.dateGiven;
+        if (existingDocSnap.exists()) {
+          const existingData = existingDocSnap.data() as Partial<AdminReceiptData>; // Use partial as some fields might be null
+
+          // Merge: Preserve the other tab's data if it exists and isn't being saved now
+          if (saveType === 'received' && updateData.given === undefined && existingData.given) {
+             updateData.given = existingData.given;
+             // Need to re-evaluate hasGivenData based on existing data for status calculation
+             hasGivenData = existingData.given && existingData.given.items.length > 0;
           }
-          // If saving 'given', preserve existing 'received' data unless explicitly saving 'received' now
-          if (saveType === 'given' && !dataToSave.received && existingData.received !== undefined) {
-            dataToSave.received = existingData.received;
-            dataToSave.dateReceived = existingData.dateReceived;
+          if (saveType === 'given' && updateData.received === undefined && existingData.received) {
+             updateData.received = existingData.received;
+             // Need to re-evaluate hasReceivedData based on existing data for status calculation
+              hasReceivedData = existingData.received && existingData.received.items.length > 0;
           }
+
+           // Determine final status after potential merge
+            if (hasGivenData && hasReceivedData) {
+              finalStatus = 'complete';
+            } else if (hasGivenData || hasReceivedData) {
+              finalStatus = 'incomplete';
+            } else {
+               finalStatus = 'empty';
+            }
+            updateData.status = finalStatus;
+
+
+           await updateDoc(docRef, updateData);
+           toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
+
         } else {
           // If the doc doesn't exist unexpectedly, treat as creation
           console.warn(`Document ${tempCurrentReceiptId} not found during update, will create new.`);
           setCurrentReceiptId(null); // Force creation logic below using state setter
           tempCurrentReceiptId = null; // Update temp variable as well
-          dataToSave.createdAt = serverTimestamp();
+           // Fall through to creation logic
         }
-
-        if (tempCurrentReceiptId) { // Check temp variable
-           await updateDoc(docRef, dataToSave);
-           toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
-        }
-
       }
 
       // --- Creating New Receipt (or if update failed finding doc) ---
-       if (!tempCurrentReceiptId) { // Check temp variable for creation case
-        const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
-        dataToSave.createdAt = serverTimestamp();
+       if (!tempCurrentReceiptId) {
+         // Determine status based only on the current save action
+         if (saveType === 'given' && hasGivenData) finalStatus = 'incomplete';
+         if (saveType === 'received' && hasReceivedData) finalStatus = 'incomplete';
+         // If somehow both were processed in this non-existent scenario, it would be 'complete', but that shouldn't happen here.
 
-        // Initialize the *other* tab's data explicitly
+         const newReceiptData: AdminReceiptData = {
+            clientId: clientId,
+            clientName: clientName,
+            given: newGivenData, // Use the calculated data or null
+            received: newReceivedData, // Use the calculated data or null
+            status: finalStatus,
+            createdAt: serverTimestamp() as Timestamp, // Add createdAt timestamp
+            updatedAt: serverTimestamp() as Timestamp, // Add updatedAt timestamp
+         };
+
+
+        // Explicitly set the *other* tab's data to null if it wasn't part of this save
         if (saveType === 'given') {
-            dataToSave.dateReceived = null; // No received date yet
-            dataToSave.received = null; // No received items yet (use null to indicate not set)
+            newReceiptData.received = null;
         } else { // saveType === 'received'
-            dataToSave.dateGiven = null; // No given date yet
-            dataToSave.given = []; // Start given items empty
-            // It's less likely to save Received first, but handle it
-            // If Given data *was* entered but not saved yet, capture it:
-             const currentFinalGivenItems = givenItems.filter(item =>
-                  item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== ''
-             );
-             if (currentFinalGivenItems.length > 0) {
-                dataToSave.given = currentFinalGivenItems;
-                dataToSave.dateGiven = dateGiven ? dateGiven.toISOString() : null;
-             }
+            newReceiptData.given = null;
         }
-        await setDoc(newReceiptRef, dataToSave);
+
+        const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
+        await setDoc(newReceiptRef, newReceiptData);
         setCurrentReceiptId(newReceiptRef.id); // Store the new ID for subsequent saves within this session
         toast({ title: 'Success', description: `Admin receipt ${saveType} data saved.` });
          // Update URL to include the new receiptId for potential refresh/bookmarking
@@ -354,21 +432,21 @@ function AdminReceiptDetailsContent() {
     }
   };
 
-  // --- Calculations for Totals ---
-  const finalGivenItemsForTotal = givenItems.filter(item =>
+  // --- Calculations for UI Totals ---
+  const validUiGivenItems = givenItems.filter(item =>
     item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== ''
   );
-  const finalReceivedItemsForTotal = receivedItems.filter(item =>
+  const validUiReceivedItems = receivedItems.filter(item =>
     item.productName.trim() !== '' || item.finalOrnamentsWt.trim() !== '' || item.stoneWeight.trim() !== '' || item.makingChargePercent.trim() !== ''
   );
 
-  const totalGivenPureWeight = finalGivenItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
-  const totalGivenTotal = finalGivenItemsForTotal.reduce((sum, item) => sum + item.total, 0);
+  const totalGivenPureWeightUi = validUiGivenItems.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
+  const totalGivenTotalUi = validUiGivenItems.reduce((sum, item) => sum + item.total, 0);
 
-  const totalReceivedFinalOrnamentsWt = finalReceivedItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0);
-  const totalReceivedStoneWeight = finalReceivedItemsForTotal.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0);
-  const totalReceivedSubTotal = finalReceivedItemsForTotal.reduce((sum, item) => sum + item.subTotal, 0);
-  const totalReceivedTotal = finalReceivedItemsForTotal.reduce((sum, item) => sum + item.total, 0);
+  const totalReceivedFinalOrnamentsWtUi = validUiReceivedItems.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0);
+  const totalReceivedStoneWeightUi = validUiReceivedItems.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0);
+  const totalReceivedSubTotalUi = validUiReceivedItems.reduce((sum, item) => sum + item.subTotal, 0);
+  const totalReceivedTotalUi = validUiReceivedItems.reduce((sum, item) => sum + item.total, 0);
 
 
   // --- Manual Calculation ---
@@ -518,10 +596,10 @@ function AdminReceiptDetailsContent() {
                            {/* Total Row */}
                            <tr className="bg-muted font-semibold">
                              <td colSpan={2} className="p-2 border text-right">Total:</td>
-                             <td className="p-2 border text-right">{totalGivenPureWeight.toFixed(3)}</td>
+                             <td className="p-2 border text-right">{totalGivenPureWeightUi.toFixed(3)}</td>
                              <td className="p-2 border"></td>
                              <td className="p-2 border"></td>
-                             <td className="p-2 border text-right">{totalGivenTotal.toFixed(3)}</td>
+                             <td className="p-2 border text-right">{totalGivenTotalUi.toFixed(3)}</td>
                              <td className="p-2 border"></td>
                            </tr>
                          </tbody>
@@ -648,11 +726,11 @@ function AdminReceiptDetailsContent() {
                                     {/* Total Row */}
                                     <tr className="bg-muted font-semibold">
                                         <td colSpan={2} className="p-2 border text-right">Total:</td>
-                                        <td className="p-2 border text-right">{totalReceivedFinalOrnamentsWt.toFixed(3)}</td>
-                                        <td className="p-2 border text-right">{totalReceivedStoneWeight.toFixed(3)}</td>
-                                        <td className="p-2 border text-right">{totalReceivedSubTotal.toFixed(3)}</td>
+                                        <td className="p-2 border text-right">{totalReceivedFinalOrnamentsWtUi.toFixed(3)}</td>
+                                        <td className="p-2 border text-right">{totalReceivedStoneWeightUi.toFixed(3)}</td>
+                                        <td className="p-2 border text-right">{totalReceivedSubTotalUi.toFixed(3)}</td>
                                         <td className="p-2 border"></td>
-                                        <td className="p-2 border text-right">{totalReceivedTotal.toFixed(3)}</td>
+                                        <td className="p-2 border text-right">{totalReceivedTotalUi.toFixed(3)}</td>
                                          <td className="p-2 border"></td>
                                     </tr>
                                 </tbody>
@@ -733,4 +811,3 @@ function AdminReceiptDetailsContent() {
     </Layout>
   );
 }
-

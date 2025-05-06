@@ -4,7 +4,7 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { doc, getDoc, Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { doc, getDoc, Timestamp, DocumentData } from 'firebase/firestore'; // Import Timestamp, DocumentData
 import { format, isValid, parseISO } from 'date-fns'; // Import isValid, parseISO
 
 import Layout from '@/components/Layout';
@@ -18,9 +18,9 @@ import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-// --- Interfaces (Matching Firestore structure) ---
+// --- Interfaces matching the NEW Firestore structure ---
 interface GivenItem {
-  id: string;
+  // id is not stored, only needed for UI in details page
   productName: string;
   pureWeight: string;
   purePercent: string;
@@ -29,51 +29,49 @@ interface GivenItem {
 }
 
 interface ReceivedItem {
-  id: string;
+  // id is not stored
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
+  makingChargePercent: string; // Changed from makingCharge
   subTotal: number; // Stored as calculated number
-  makingChargePercent: string;
   total: number; // Stored as calculated number
+}
+
+interface GivenData {
+    date: string | null; // ISO String or null
+    items: GivenItem[];
+    totalPureWeight: number;
+    total: number;
+}
+
+interface ReceivedData {
+    date: string | null; // ISO String or null
+    items: ReceivedItem[];
+    totalOrnamentsWt: number;
+    totalStoneWeight: number;
+    totalSubTotal: number;
+    total: number;
 }
 
 interface AdminReceiptData {
   clientId: string;
   clientName: string;
-  dateGiven: string | null; // ISO String or null
-  given: GivenItem[];
-  dateReceived: string | null; // ISO String or null
-  received: ReceivedItem[] | null; // Array or null
-  createdAt?: Timestamp; // Firestore Timestamp
-  updatedAt?: Timestamp; // Firestore Timestamp
+  given: GivenData | null;
+  received: ReceivedData | null;
+  status: 'complete' | 'incomplete' | 'empty';
+  createdAt: Timestamp; // Firestore Timestamp
+  updatedAt: Timestamp; // Firestore Timestamp
 }
 
-// --- Helper Functions (Copied from details for consistency) ---
-const calculateGivenTotal = (item: GivenItem): number => {
-  const pureWeight = parseFloat(item.pureWeight) || 0;
-  const purePercent = parseFloat(item.purePercent) || 0;
-  const melting = parseFloat(item.melting) || 0;
-  if (melting === 0) return 0;
-  const total = (pureWeight * purePercent) / melting;
-  return parseFloat(total.toFixed(3));
-};
+// Helper functions (adjust if needed, but calculations are stored now)
+const getDisplayValue = (value: string | number | undefined | null, decimals = 3): string => {
+    if (value === undefined || value === null) return '0.' + '0'.repeat(decimals);
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    return (isNaN(num) ? 0 : num).toFixed(decimals);
+}
 
-const calculateReceivedSubTotal = (item: ReceivedItem): number => {
-  const finalOrnamentsWt = parseFloat(item.finalOrnamentsWt) || 0;
-  const stoneWeight = parseFloat(item.stoneWeight) || 0;
-  const subTotal = finalOrnamentsWt - stoneWeight;
-  return parseFloat(subTotal.toFixed(3));
-};
-
-const calculateReceivedTotal = (item: ReceivedItem): number => {
-  const subTotal = calculateReceivedSubTotal(item);
-  const makingChargePercent = parseFloat(item.makingChargePercent) || 0;
-  const total = subTotal * (makingChargePercent / 100);
-  return parseFloat(total.toFixed(3));
-};
-
-
+// --- Component ---
 export default function AdminBillViewPage() {
   return (
     <Layout>
@@ -112,7 +110,15 @@ function AdminBillViewContent() {
         const docSnap = await getDoc(receiptRef);
 
         if (docSnap.exists()) {
-          setReceiptData({ id: docSnap.id, ...docSnap.data() } as AdminReceiptData);
+           // Cast directly to the new interface
+           const data = docSnap.data() as AdminReceiptData;
+            // Validate or provide defaults if necessary, though structure should be more consistent now
+           setReceiptData({
+             ...data,
+             // Ensure timestamps are Timestamps, handle potential Firestore data inconsistencies
+             createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
+             updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(),
+           });
         } else {
           toast({ variant: "destructive", title: "Not Found", description: "Receipt not found." });
           router.push('/admin-bill');
@@ -129,45 +135,9 @@ function AdminBillViewContent() {
     fetchReceipt();
   }, [receiptId, toast, router]);
 
-  // --- Calculations for Totals ---
-  const calculateTotals = (items: (GivenItem | ReceivedItem)[], type: 'given' | 'received') => {
-    let totalPureWeight = 0;
-    let totalGivenTotal = 0;
-    let totalFinalOrnamentsWt = 0;
-    let totalStoneWeight = 0;
-    let totalReceivedSubTotal = 0;
-    let totalReceivedTotal = 0;
-
-    if (type === 'given' && items) {
-        (items as GivenItem[]).forEach(item => {
-            const itemTotal = calculateGivenTotal(item); // Use helper
-            totalPureWeight += parseFloat(item.pureWeight) || 0;
-            totalGivenTotal += itemTotal;
-        });
-    } else if (type === 'received' && items) { // received and items exist
-        (items as ReceivedItem[]).forEach(item => {
-             const itemSubTotal = calculateReceivedSubTotal(item); // Use helper
-             const itemTotal = calculateReceivedTotal(item);    // Use helper
-             totalFinalOrnamentsWt += parseFloat(item.finalOrnamentsWt) || 0;
-             totalStoneWeight += parseFloat(item.stoneWeight) || 0;
-             totalReceivedSubTotal += itemSubTotal;
-             totalReceivedTotal += itemTotal;
-        });
-    }
-
-    return {
-        totalPureWeight: totalPureWeight.toFixed(3),
-        totalGivenTotal: totalGivenTotal.toFixed(3),
-        totalFinalOrnamentsWt: totalFinalOrnamentsWt.toFixed(3),
-        totalStoneWeight: totalStoneWeight.toFixed(3),
-        totalReceivedSubTotal: totalReceivedSubTotal.toFixed(3),
-        totalReceivedTotal: totalReceivedTotal.toFixed(3),
-    };
-  };
-
-  const givenTotals = receiptData?.given ? calculateTotals(receiptData.given, 'given') : null;
-  // Ensure receiptData.received is treated as an array, even if null
-  const receivedTotals = calculateTotals(receiptData?.received ?? [], 'received');
+  // Totals are now directly available in receiptData.given and receiptData.received
+  const givenTotals = receiptData?.given;
+  const receivedTotals = receiptData?.received;
 
 
    // --- Manual Calculation ---
@@ -209,15 +179,14 @@ function AdminBillViewContent() {
   }
 
   // Check if there's valid data to display for each section
-  const hasGivenData = receiptData.given && Array.isArray(receiptData.given) && receiptData.given.length > 0;
-  // Use `?? []` to safely check length even if `received` is null
-  const hasReceivedData = receiptData.received && Array.isArray(receiptData.received) && receiptData.received.length > 0;
+  const hasGivenData = receiptData.given && receiptData.given.items.length > 0;
+  const hasReceivedData = receiptData.received && receiptData.received.items.length > 0;
 
   // Parse and format dates safely
-  const formattedDateGiven = receiptData.dateGiven && isValid(parseISO(receiptData.dateGiven))
-                              ? format(parseISO(receiptData.dateGiven), 'PPP') : 'N/A';
-  const formattedDateReceived = receiptData.dateReceived && isValid(parseISO(receiptData.dateReceived))
-                                ? format(parseISO(receiptData.dateReceived), 'PPP') : 'N/A';
+  const formattedDateGiven = receiptData.given?.date && isValid(parseISO(receiptData.given.date))
+                              ? format(parseISO(receiptData.given.date), 'PPP') : 'N/A';
+  const formattedDateReceived = receiptData.received?.date && isValid(parseISO(receiptData.received.date))
+                                ? format(parseISO(receiptData.received.date), 'PPP') : 'N/A';
 
   return (
     <Layout>
@@ -256,24 +225,26 @@ function AdminBillViewContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {receiptData.given.map((item, index) => (
-                      <tr key={item.id}>
+                     {/* Add null check for receiptData.given.items */}
+                    {receiptData.given?.items?.map((item, index) => (
+                      <tr key={`given-${index}`}> {/* Add unique key prefix */}
                         <td className="p-2 border">{index + 1}</td>
                         <td className="p-2 border">{item.productName}</td>
-                        <td className="p-2 border text-right">{parseFloat(item.pureWeight || '0').toFixed(3)}</td>
-                        <td className="p-2 border text-right">{parseFloat(item.purePercent || '0').toFixed(2)}</td>
-                        <td className="p-2 border text-right">{parseFloat(item.melting || '0').toFixed(2)}</td>
-                        <td className="p-2 border text-right">{calculateGivenTotal(item).toFixed(3)}</td>
+                        {/* Use helper for consistent display */}
+                        <td className="p-2 border text-right">{getDisplayValue(item.pureWeight, 3)}</td>
+                        <td className="p-2 border text-right">{getDisplayValue(item.purePercent, 2)}</td>
+                        <td className="p-2 border text-right">{getDisplayValue(item.melting, 2)}</td>
+                        <td className="p-2 border text-right">{getDisplayValue(item.total, 3)}</td>
                       </tr>
                     ))}
-                     {/* Total Row */}
+                     {/* Total Row - Directly use stored totals */}
                      {givenTotals && (
                        <tr className="bg-muted font-semibold">
                          <td colSpan={2} className="p-2 border text-right">Total:</td>
-                         <td className="p-2 border text-right">{givenTotals.totalPureWeight}</td>
+                         <td className="p-2 border text-right">{getDisplayValue(givenTotals.totalPureWeight, 3)}</td>
                          <td className="p-2 border"></td>
                          <td className="p-2 border"></td>
-                         <td className="p-2 border text-right">{givenTotals.totalGivenTotal}</td>
+                         <td className="p-2 border text-right">{getDisplayValue(givenTotals.total, 3)}</td>
                        </tr>
                      )}
                   </tbody>
@@ -315,26 +286,28 @@ function AdminBillViewContent() {
                         </tr>
                     </thead>
                     <tbody>
-                        {(receiptData.received ?? []).map((item, index) => ( // Use nullish coalescing
-                           <tr key={item.id}>
+                       {/* Add null check for receiptData.received.items */}
+                        {receiptData.received?.items?.map((item, index) => ( // Use nullish coalescing
+                           <tr key={`received-${index}`}> {/* Add unique key prefix */}
                               <td className="p-2 border">{index + 1}</td>
                               <td className="p-2 border">{item.productName}</td>
-                              <td className="p-2 border text-right">{parseFloat(item.finalOrnamentsWt || '0').toFixed(3)}</td>
-                              <td className="p-2 border text-right">{parseFloat(item.stoneWeight || '0').toFixed(3)}</td>
-                              <td className="p-2 border text-right">{calculateReceivedSubTotal(item).toFixed(3)}</td>
-                              <td className="p-2 border text-right">{parseFloat(item.makingChargePercent || '0').toFixed(2)}</td>
-                              <td className="p-2 border text-right">{calculateReceivedTotal(item).toFixed(3)}</td>
+                              {/* Use helper for consistent display */}
+                              <td className="p-2 border text-right">{getDisplayValue(item.finalOrnamentsWt, 3)}</td>
+                              <td className="p-2 border text-right">{getDisplayValue(item.stoneWeight, 3)}</td>
+                              <td className="p-2 border text-right">{getDisplayValue(item.subTotal, 3)}</td>
+                              <td className="p-2 border text-right">{getDisplayValue(item.makingChargePercent, 2)}</td>
+                              <td className="p-2 border text-right">{getDisplayValue(item.total, 3)}</td>
                            </tr>
                         ))}
-                        {/* Total Row */}
+                        {/* Total Row - Directly use stored totals */}
                          {receivedTotals && (
                            <tr className="bg-muted font-semibold">
                                <td colSpan={2} className="p-2 border text-right">Total:</td>
-                               <td className="p-2 border text-right">{receivedTotals.totalFinalOrnamentsWt}</td>
-                               <td className="p-2 border text-right">{receivedTotals.totalStoneWeight}</td>
-                               <td className="p-2 border text-right">{receivedTotals.totalReceivedSubTotal}</td>
+                               <td className="p-2 border text-right">{getDisplayValue(receivedTotals.totalOrnamentsWt, 3)}</td>
+                               <td className="p-2 border text-right">{getDisplayValue(receivedTotals.totalStoneWeight, 3)}</td>
+                               <td className="p-2 border text-right">{getDisplayValue(receivedTotals.totalSubTotal, 3)}</td>
                                <td className="p-2 border"></td>
-                               <td className="p-2 border text-right">{receivedTotals.totalReceivedTotal}</td>
+                               <td className="p-2 border text-right">{getDisplayValue(receivedTotals.total, 3)}</td>
                            </tr>
                          )}
                     </tbody>
@@ -410,4 +383,3 @@ function AdminBillViewContent() {
     </Layout>
   );
 }
-

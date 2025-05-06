@@ -4,8 +4,8 @@
 import type { ChangeEvent } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, Timestamp } from 'firebase/firestore';
-import { format, isValid, parseISO } from 'date-fns'; // Added parseISO
+import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData } from 'firebase/firestore'; // Added DocumentData
+import { format, isValid, parseISO, startOfDay, endOfDay } from 'date-fns'; // Added startOfDay, endOfDay
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -20,17 +20,32 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 
-// Interface matching the AdminReceipts structure in Firestore
+// Interface matching the NEW AdminReceipts structure in Firestore
+interface GivenData {
+    date: string | null;
+    items: any[];
+    totalPureWeight: number;
+    total: number;
+}
+
+interface ReceivedData {
+    date: string | null;
+    items: any[];
+    totalOrnamentsWt: number;
+    totalStoneWeight: number;
+    totalSubTotal: number;
+    total: number;
+}
+
 interface AdminReceipt {
   id: string; // Firestore document ID
   clientId: string;
   clientName: string;
-  dateGiven: string | null; // ISO string or null
-  given: any[]; // Define more specific type if needed
-  dateReceived: string | null; // ISO string or null
-  received: any[] | null; // Can be null
-  createdAt?: Timestamp;
-  updatedAt?: Timestamp;
+  given: GivenData | null;
+  received: ReceivedData | null;
+  status: 'complete' | 'incomplete' | 'empty';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export default function AdminBillPage() {
@@ -56,12 +71,22 @@ function AdminBillContent() {
       setLoading(true);
       try {
         const receiptsRef = collection(db, 'AdminReceipts');
-        // Order by creation date, newest first
         const q = query(receiptsRef, orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
         const fetchedReceipts: AdminReceipt[] = [];
         querySnapshot.forEach((doc) => {
-          fetchedReceipts.push({ id: doc.id, ...doc.data() } as AdminReceipt);
+           // Ensure data matches the AdminReceipt interface, provide defaults if needed
+          const data = doc.data() as DocumentData; // Use DocumentData initially
+          fetchedReceipts.push({
+            id: doc.id,
+            clientId: data.clientId || '',
+            clientName: data.clientName || 'Unknown Client',
+            given: data.given || null,
+            received: data.received || null,
+            status: data.status || 'empty',
+            createdAt: data.createdAt || Timestamp.now(), // Provide default timestamp
+            updatedAt: data.updatedAt || Timestamp.now(), // Provide default timestamp
+          } as AdminReceipt); // Cast to AdminReceipt
         });
         setReceipts(fetchedReceipts);
         setFilteredReceipts(fetchedReceipts); // Initially show all
@@ -87,18 +112,21 @@ function AdminBillContent() {
       );
     }
 
-    // Filter by Date (check if dateGiven OR dateReceived matches the selected date)
+    // Filter by Date (check if given.date OR received.date matches the selected date)
     if (dateFilter && isValid(dateFilter)) {
        const filterDateStr = format(dateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
-            // Parse ISO string date from Firestore before formatting
-            const givenDate = receipt.dateGiven ? parseISO(receipt.dateGiven) : null;
-            const receivedDate = receipt.dateReceived ? parseISO(receipt.dateReceived) : null;
-
+            // Check given date
+            const givenDate = receipt.given?.date ? parseISO(receipt.given.date) : null;
             const givenDateStr = givenDate && isValid(givenDate) ? format(givenDate, 'yyyy-MM-dd') : null;
-            const receivedDateStr = receivedDate && isValid(receivedDate) ? format(receivedDate, 'yyyy-MM-dd') : null;
+            if (givenDateStr === filterDateStr) return true;
 
-            return givenDateStr === filterDateStr || receivedDateStr === filterDateStr;
+            // Check received date
+            const receivedDate = receipt.received?.date ? parseISO(receipt.received.date) : null;
+            const receivedDateStr = receivedDate && isValid(receivedDate) ? format(receivedDate, 'yyyy-MM-dd') : null;
+            if (receivedDateStr === filterDateStr) return true;
+
+            return false; // No match
         });
     }
 
@@ -106,22 +134,15 @@ function AdminBillContent() {
     setFilteredReceipts(currentReceipts);
   }, [clientNameFilter, dateFilter, receipts]);
 
-  // --- Determine Receipt Status ---
-  const getReceiptStatus = (receipt: AdminReceipt): { text: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } => {
-    // Check if the arrays exist, are not null, and have items
-    const hasGiven = receipt.given && Array.isArray(receipt.given) && receipt.given.length > 0 && receipt.dateGiven;
-    // `received` can be null or empty array, so check for non-null and length > 0
-    const hasReceived = receipt.received && Array.isArray(receipt.received) && receipt.received.length > 0 && receipt.dateReceived;
-
-    if (hasGiven && hasReceived) {
-      return { text: 'Completed', variant: 'default' };
-    } else if (hasGiven || hasReceived) { // If either has data but not both
-      return { text: 'Incomplete', variant: 'secondary' };
-    } else {
-      // This case might happen if a document was created but no data saved yet.
-      return { text: 'Empty', variant: 'destructive' };
-    }
-  };
+   // --- Determine Receipt Status Variant for Badge ---
+   const getStatusVariant = (status: 'complete' | 'incomplete' | 'empty'): 'default' | 'secondary' | 'destructive' | 'outline' => {
+     switch (status) {
+       case 'complete': return 'default'; // Green/Success or primary color
+       case 'incomplete': return 'secondary'; // Yellow/Warning or secondary color
+       case 'empty': return 'destructive'; // Red/Error
+       default: return 'outline';
+     }
+   };
 
   // --- Navigation Handlers ---
   const handleViewReceipt = (receiptId: string) => {
@@ -181,7 +202,7 @@ function AdminBillContent() {
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
-                  const status = getReceiptStatus(receipt);
+                  const statusVariant = getStatusVariant(receipt.status);
                   // Use updatedAt first, then createdAt for display date
                   const displayDate = receipt.updatedAt?.toDate() ?? receipt.createdAt?.toDate();
 
@@ -204,8 +225,8 @@ function AdminBillContent() {
                          )}
                       </div>
                        <div className="flex items-center gap-3 md:gap-4 mt-2 md:mt-0">
-                         <Badge variant={status.variant} className="text-xs capitalize"> {/* Capitalize status text */}
-                           {status.text}
+                         <Badge variant={statusVariant} className="text-xs capitalize"> {/* Capitalize status text */}
+                           {receipt.status}
                          </Badge>
                          <Button
                             variant="outline"
@@ -237,4 +258,3 @@ function AdminBillContent() {
     </div>
   );
 }
-
