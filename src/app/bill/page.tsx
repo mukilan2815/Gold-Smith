@@ -28,6 +28,7 @@ import {
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
 
 
 // Interface matching the ClientReceipts structure in Firestore
@@ -70,6 +71,13 @@ function BillContent() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Debounce filter inputs
+  const debouncedShopName = useDebounce(shopNameFilter, 300); // 300ms delay
+  const debouncedClientName = useDebounce(clientNameFilter, 300);
+  const debouncedPhoneNumber = useDebounce(phoneNumberFilter, 300);
+  const debouncedDateFilter = useDebounce(dateFilter, 300); // Debounce date changes too
+
+
   // --- Fetch Receipts from Firestore ---
   const fetchReceipts = async () => {
     setLoading(true);
@@ -80,10 +88,30 @@ function BillContent() {
       const querySnapshot = await getDocs(q);
       const fetchedReceipts: ClientReceipt[] = [];
       querySnapshot.forEach((doc) => {
-        fetchedReceipts.push({ id: doc.id, ...doc.data() } as ClientReceipt);
+        const data = doc.data();
+        // Ensure issueDate is handled correctly, even if stored differently (e.g., Timestamp)
+        let issueDateStr = '';
+        if (data.issueDate) {
+          if (data.issueDate instanceof Timestamp) {
+            issueDateStr = data.issueDate.toDate().toISOString();
+          } else if (typeof data.issueDate === 'string') {
+             // Attempt to parse string dates, assuming ISO format primarily
+             try {
+                 issueDateStr = parseISO(data.issueDate).toISOString();
+             } catch (e) {
+                 console.warn(`Could not parse date string: ${data.issueDate}`);
+                 issueDateStr = ''; // Or handle as invalid
+             }
+          }
+        }
+        fetchedReceipts.push({
+            id: doc.id,
+            ...data,
+            issueDate: issueDateStr, // Ensure issueDate is stored as ISO string in state
+         } as ClientReceipt);
       });
       setReceipts(fetchedReceipts);
-      // setFilteredReceipts(fetchedReceipts); // Moved to filter useEffect
+      // setFilteredReceipts(fetchedReceipts); // Filter logic is now in useEffect
     } catch (error) {
       console.error("Error fetching client receipts:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
@@ -95,52 +123,52 @@ function BillContent() {
   useEffect(() => {
     fetchReceipts();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Changed dependency to [] to fetch on mount
+  }, []); // Fetch only on mount
 
-  // --- Filter Logic ---
+  // --- Filter Logic (now using debounced values) ---
   useEffect(() => {
+    // Start with the full list of receipts
     let currentReceipts = [...receipts];
 
-    // Filter by Shop Name (if shopName exists)
-    if (shopNameFilter.trim() !== '') {
+    // Filter by Shop Name
+    if (debouncedShopName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
-        receipt.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase())
+        receipt.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
       );
     }
 
     // Filter by Client Name
-    if (clientNameFilter.trim() !== '') {
+    if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
-        receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
+        receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
 
-    // Filter by Phone Number (if phoneNumber exists)
-    if (phoneNumberFilter.trim() !== '') {
+    // Filter by Phone Number
+    if (debouncedPhoneNumber.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
-        receipt.phoneNumber?.includes(phoneNumberFilter)
+        receipt.phoneNumber?.includes(debouncedPhoneNumber)
       );
     }
 
     // Filter by Issue Date
-    if (dateFilter && isValid(dateFilter)) {
-        const filterDateStr = format(dateFilter, 'yyyy-MM-dd');
-        currentReceipts = currentReceipts.filter(receipt => {
-            if (!receipt.issueDate) return false; // Skip receipts without an issue date
-            try {
-                 // Parse ISO string date from Firestore before formatting
-                const issueDate = parseISO(receipt.issueDate);
-                // Check if parsing was successful and the date is valid
-                return isValid(issueDate) && format(issueDate, 'yyyy-MM-dd') === filterDateStr;
-            } catch (e) {
-                console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
-                return false; // Treat invalid date formats as non-matching
-            }
-        });
+    if (debouncedDateFilter && isValid(debouncedDateFilter)) {
+      const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
+      currentReceipts = currentReceipts.filter(receipt => {
+        // Check if issueDate exists and is a valid ISO string before parsing
+        if (!receipt.issueDate || typeof receipt.issueDate !== 'string') return false;
+        try {
+          const issueDate = parseISO(receipt.issueDate); // Parse the ISO string
+          return isValid(issueDate) && format(issueDate, 'yyyy-MM-dd') === filterDateStr;
+        } catch (e) {
+          console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
+          return false;
+        }
+      });
     }
 
     setFilteredReceipts(currentReceipts);
-  }, [shopNameFilter, clientNameFilter, phoneNumberFilter, dateFilter, receipts]); // Rerun when filters or base receipts change
+  }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, debouncedDateFilter, receipts]); // Rerun when debounced filters or base receipts change
 
   // --- Navigation Handlers ---
   const handleViewReceipt = (receipt: ClientReceipt) => {
@@ -153,8 +181,10 @@ function BillContent() {
     try {
       const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); // Reference by ID
       await deleteDoc(receiptRef);
-      // Fetch receipts again after deletion
-       await fetchReceipts(); // Refetch data to update UI
+      // Remove the deleted receipt from the local state immediately
+      setReceipts((prevReceipts) => prevReceipts.filter(r => r.id !== receiptToDelete.id));
+      // Optionally refetch if there's a chance of external changes, but removing locally is faster for UI feedback
+      // await fetchReceipts();
       toast({ title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.` });
     } catch (error) {
       console.error("Error deleting receipt:", error);
@@ -177,21 +207,21 @@ function BillContent() {
               type="text"
               placeholder="Filter by Shop Name"
               value={shopNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setShopNameFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setShopNameFilter(e.target.value)} // Update immediate state
                className="rounded-md"
             />
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} // Update immediate state
                className="rounded-md"
             />
             <Input
               type="text" // Keep as text for flexibility
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPhoneNumberFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setPhoneNumberFilter(e.target.value)} // Update immediate state
                className="rounded-md"
             />
             <Popover>
@@ -211,7 +241,7 @@ function BillContent() {
                 <Calendar
                   mode="single"
                   selected={dateFilter}
-                  onSelect={setDateFilter}
+                  onSelect={setDateFilter} // Update immediate state
                   initialFocus
                 />
               </PopoverContent>
@@ -225,13 +255,18 @@ function BillContent() {
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
-                   let formattedIssueDate = 'Invalid Date';
-                   if (receipt.issueDate && isValid(parseISO(receipt.issueDate))) {
-                       try {
-                           formattedIssueDate = format(parseISO(receipt.issueDate), 'PPP');
-                       } catch (e) {
-                            console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
-                       }
+                   let formattedIssueDate = 'N/A';
+                   if (receipt.issueDate && typeof receipt.issueDate === 'string') {
+                     try {
+                         const parsedDate = parseISO(receipt.issueDate);
+                         if (isValid(parsedDate)) {
+                             formattedIssueDate = format(parsedDate, 'PPP');
+                         } else {
+                            console.warn(`Invalid date parsed for receipt ${receipt.id}: ${receipt.issueDate}`);
+                         }
+                     } catch (e) {
+                          console.warn(`Error parsing date string for receipt ${receipt.id}: ${receipt.issueDate}`, e);
+                     }
                    }
 
                   return (

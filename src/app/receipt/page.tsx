@@ -23,6 +23,7 @@ import { collection, getDocs, query, orderBy, doc, deleteDoc, limit } from 'fire
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils'; // Import cn for AlertDialog styling
+import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
 
 // Define the Client interface matching Firestore structure
 interface Client {
@@ -53,6 +54,11 @@ function ReceiptContent() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Debounce filter inputs
+  const debouncedShopName = useDebounce(shopNameFilter, 300); // 300ms delay
+  const debouncedClientName = useDebounce(clientNameFilter, 300);
+  const debouncedPhoneNumber = useDebounce(phoneNumberFilter, 300);
+
   // Fetch Clients Function
   const fetchClients = async () => {
     setLoading(true);
@@ -66,7 +72,8 @@ function ReceiptContent() {
         fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
       });
       setClients(fetchedClients);
-      // setFilteredClients(fetchedClients); // Initialize filtered list // Moved to filter useEffect
+      // Initial filter when clients are loaded
+      // filterClients(fetchedClients, debouncedShopName, debouncedClientName, debouncedPhoneNumber);
     } catch (error) {
       console.error("Error fetching clients from Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
@@ -79,31 +86,31 @@ function ReceiptContent() {
   useEffect(() => {
     fetchClients();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Changed dependency to [] to fetch on mount
+  }, []); // Fetch only on mount
 
 
-  // Filter Logic - Now runs on clients state change or filter change
+  // Filter Logic - Now runs on debounced values or clients state change
   useEffect(() => {
     let currentClients = [...clients];
 
-    if (shopNameFilter.trim() !== '') {
+    if (debouncedShopName.trim() !== '') {
        currentClients = currentClients.filter((client) =>
-         client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase())
+         client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
        );
     }
-    if (clientNameFilter.trim() !== '') {
+    if (debouncedClientName.trim() !== '') {
         currentClients = currentClients.filter((client) =>
-          client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase())
+          client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase())
         );
     }
-     if (phoneNumberFilter.trim() !== '') {
+     if (debouncedPhoneNumber.trim() !== '') {
        currentClients = currentClients.filter((client) =>
-         client.phoneNumber?.includes(phoneNumberFilter)
+         client.phoneNumber?.includes(debouncedPhoneNumber)
        );
      }
 
     setFilteredClients(currentClients);
-  }, [shopNameFilter, clientNameFilter, phoneNumberFilter, clients]); // Rerun filter when filters or base clients change
+  }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, clients]); // Rerun filter when debounced filters or base clients change
 
 
   const handleClientSelection = (client: Client) => {
@@ -116,8 +123,9 @@ function ReceiptContent() {
      try {
        const clientRef = doc(db, 'ClientDetails', clientToDelete.id); // Use Firestore ID
        await deleteDoc(clientRef);
-       // Refetch clients after deletion to update the list
-       await fetchClients(); // Refetch data to update UI
+       // Remove client from local state immediately for faster UI update
+       setClients((prevClients) => prevClients.filter(c => c.id !== clientToDelete.id));
+       // await fetchClients(); // Optionally refetch if needed
        toast({ title: 'Success', description: `Client ${clientToDelete.clientName} deleted.` });
      } catch (error) {
        console.error("Error deleting client:", error);
@@ -140,21 +148,21 @@ function ReceiptContent() {
               type="text"
               placeholder="Filter by Shop Name"
               value={shopNameFilter}
-              onChange={(e) => setShopNameFilter(e.target.value)}
+              onChange={(e) => setShopNameFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e) => setClientNameFilter(e.target.value)}
+              onChange={(e) => setClientNameFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
             <Input
               type="text" // Changed to text to allow flexible phone number formats
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
-              onChange={(e) => setPhoneNumberFilter(e.target.value)}
+              onChange={(e) => setPhoneNumberFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
           </div>

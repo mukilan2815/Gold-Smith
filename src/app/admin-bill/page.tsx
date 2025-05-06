@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
+import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
 
 // Interface matching the NEW AdminReceipts structure in Firestore
 interface GivenData {
@@ -65,6 +66,11 @@ function AdminBillContent() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Debounce filter inputs
+  const debouncedClientName = useDebounce(clientNameFilter, 300); // 300ms delay
+  const debouncedDateFilter = useDebounce(dateFilter, 300);
+
+
    // --- Fetch Receipts from Firestore ---
    const fetchReceipts = async () => {
      setLoading(true);
@@ -77,19 +83,24 @@ function AdminBillContent() {
        querySnapshot.forEach((doc) => {
           // Ensure data matches the AdminReceipt interface, provide defaults if needed
          const data = doc.data() as DocumentData; // Use DocumentData initially
+         // Ensure dates are parsed correctly if stored as strings
+         const givenDateStr = data.given?.date;
+         const receivedDateStr = data.received?.date;
+
          fetchedReceipts.push({
            id: doc.id,
            clientId: data.clientId || '',
            clientName: data.clientName || 'Unknown Client',
-           given: data.given || null,
-           received: data.received || null,
+           given: { ...data.given, date: givenDateStr } || null, // Keep date as string from Firestore
+           received: { ...data.received, date: receivedDateStr } || null, // Keep date as string from Firestore
            status: data.status || 'empty',
            createdAt: data.createdAt || Timestamp.now(), // Provide default timestamp
            updatedAt: data.updatedAt || Timestamp.now(), // Provide default timestamp
          } as AdminReceipt); // Cast to AdminReceipt
        });
        setReceipts(fetchedReceipts);
-       // setFilteredReceipts(fetchedReceipts); // Moved to filter useEffect
+       // Filter initial data
+       // filterReceipts(fetchedReceipts, debouncedClientName, debouncedDateFilter);
      } catch (error) {
        console.error("Error fetching admin receipts:", error);
        toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
@@ -102,40 +113,53 @@ function AdminBillContent() {
   useEffect(() => {
     fetchReceipts();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Changed dependency to [] to fetch on mount
+  }, []); // Fetch only on mount
 
-  // --- Filter Logic ---
+  // --- Filter Logic (now uses debounced values) ---
   useEffect(() => {
     let currentReceipts = [...receipts];
 
     // Filter by Client Name
-    if (clientNameFilter.trim() !== '') {
+    if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
-        receipt.clientName.toLowerCase().includes(clientNameFilter.toLowerCase())
+        receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
 
-    // Filter by Date (check if given.date OR received.date matches the selected date)
-    if (dateFilter && isValid(dateFilter)) {
-       const filterDateStr = format(dateFilter, 'yyyy-MM-dd');
+    // Filter by Date
+    if (debouncedDateFilter && isValid(debouncedDateFilter)) {
+       const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
             // Check given date
-            const givenDate = receipt.given?.date ? parseISO(receipt.given.date) : null;
-            const givenDateStr = givenDate && isValid(givenDate) ? format(givenDate, 'yyyy-MM-dd') : null;
+            let givenDateStr = null;
+            if (receipt.given?.date && typeof receipt.given.date === 'string') {
+                try {
+                    const parsedDate = parseISO(receipt.given.date);
+                    if (isValid(parsedDate)) {
+                        givenDateStr = format(parsedDate, 'yyyy-MM-dd');
+                    }
+                } catch (e) { console.warn('Invalid given date format:', receipt.given.date); }
+            }
             if (givenDateStr === filterDateStr) return true;
 
             // Check received date
-            const receivedDate = receipt.received?.date ? parseISO(receipt.received.date) : null;
-            const receivedDateStr = receivedDate && isValid(receivedDate) ? format(receivedDate, 'yyyy-MM-dd') : null;
+            let receivedDateStr = null;
+            if (receipt.received?.date && typeof receipt.received.date === 'string') {
+                 try {
+                     const parsedDate = parseISO(receipt.received.date);
+                     if (isValid(parsedDate)) {
+                         receivedDateStr = format(parsedDate, 'yyyy-MM-dd');
+                     }
+                 } catch (e) { console.warn('Invalid received date format:', receipt.received.date); }
+            }
             if (receivedDateStr === filterDateStr) return true;
 
             return false; // No match
         });
     }
 
-
     setFilteredReceipts(currentReceipts);
-  }, [clientNameFilter, dateFilter, receipts]); // Rerun filter when filters or base receipts change
+  }, [debouncedClientName, debouncedDateFilter, receipts]); // Rerun filter when debounced filters or base receipts change
 
    // --- Determine Receipt Status Variant for Badge ---
    const getStatusVariant = (status: 'complete' | 'incomplete' | 'empty'): 'default' | 'secondary' | 'destructive' | 'outline' => {
@@ -171,7 +195,7 @@ function AdminBillContent() {
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
             <Popover>
@@ -191,7 +215,7 @@ function AdminBillContent() {
                 <Calendar
                   mode="single"
                   selected={dateFilter}
-                  onSelect={setDateFilter}
+                  onSelect={setDateFilter} // Update immediate state
                   initialFocus
                 />
               </PopoverContent>

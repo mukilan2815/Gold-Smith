@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore'; // Added limit
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
 
 // Define the Client interface matching Firestore structure
 interface Client {
@@ -40,6 +41,11 @@ function AdminReceiptContent() {
   const router = useRouter();
   const { toast } = useToast();
 
+  // Debounce filter inputs
+  const debouncedShopName = useDebounce(shopNameFilter, 300); // 300ms delay
+  const debouncedClientName = useDebounce(clientNameFilter, 300);
+  const debouncedPhoneNumber = useDebounce(phoneNumberFilter, 300);
+
    // --- Fetch Clients ---
    const fetchClients = async () => {
      setLoading(true);
@@ -53,8 +59,8 @@ function AdminReceiptContent() {
          fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
        });
        setClients(fetchedClients);
-       // Initialize filtered clients
-       // setFilteredClients(fetchedClients); // Moved to useEffect for filtering
+       // Filter initial data
+       // filterClients(fetchedClients, debouncedShopName, debouncedClientName, debouncedPhoneNumber);
      } catch (error) {
        console.error("Error fetching clients from Firestore:", error);
        toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
@@ -66,30 +72,30 @@ function AdminReceiptContent() {
   useEffect(() => {
     fetchClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Changed dependency to [] to fetch on mount
+  }, []); // Fetch only on mount
 
-  // --- Filter Logic ---
+  // --- Filter Logic (now using debounced values) ---
   useEffect(() => {
      let currentClients = [...clients];
 
-     if (shopNameFilter.trim() !== '') {
+     if (debouncedShopName.trim() !== '') {
         currentClients = currentClients.filter((client) =>
-          client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase())
+          client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
         );
      }
-     if (clientNameFilter.trim() !== '') {
+     if (debouncedClientName.trim() !== '') {
          currentClients = currentClients.filter((client) =>
-           client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase())
+           client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase())
          );
      }
-      if (phoneNumberFilter.trim() !== '') {
+      if (debouncedPhoneNumber.trim() !== '') {
         currentClients = currentClients.filter((client) =>
-          client.phoneNumber?.includes(phoneNumberFilter)
+          client.phoneNumber?.includes(debouncedPhoneNumber)
         );
       }
 
      setFilteredClients(currentClients); // Update filtered list based on filters and base clients
-   }, [shopNameFilter, clientNameFilter, phoneNumberFilter, clients]); // Rerun when filters or clients change
+   }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, clients]); // Rerun when debounced filters or clients change
 
 
   const handleClientSelection = (client: Client) => {
@@ -111,21 +117,21 @@ function AdminReceiptContent() {
               type="text"
               placeholder="Filter by Shop Name"
               value={shopNameFilter}
-              onChange={(e) => setShopNameFilter(e.target.value)}
+              onChange={(e) => setShopNameFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e) => setClientNameFilter(e.target.value)}
+              onChange={(e) => setClientNameFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
             <Input
               type="text" // Changed to text to allow flexible phone number formats
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
-              onChange={(e) => setPhoneNumberFilter(e.target.value)}
+              onChange={(e) => setPhoneNumberFilter(e.target.value)} // Update immediate state
               className="rounded-md"
             />
           </div>
