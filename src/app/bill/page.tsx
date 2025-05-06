@@ -1,13 +1,14 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, deleteDoc, doc, Timestamp } from 'firebase/firestore'; // Added Timestamp, deleteDoc, doc
+import { collection, getDocs, query, orderBy, where, deleteDoc, doc, Timestamp, limit } from 'firebase/firestore'; // Added Timestamp, deleteDoc, doc, limit
 import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns'; // Added isValid, startOfDay, endOfDay
 import { Calendar as CalendarIcon, Trash2, Eye } from 'lucide-react'; // Added Trash2, Eye
 
 import Layout from '@/components/Layout';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Added CardDescription
 import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea
@@ -44,6 +45,7 @@ interface ClientReceipt {
     netWt: number;
     finalWt: number;
     stoneAmt: number;
+    stoneWt?: number; // Make stoneWt optional as it might not exist in older docs
   };
   createdAt?: Timestamp; // Firestore Timestamp
 }
@@ -69,30 +71,31 @@ function BillContent() {
   const { toast } = useToast();
 
   // --- Fetch Receipts from Firestore ---
-  useEffect(() => {
-    const fetchReceipts = async () => {
-      setLoading(true);
-      try {
-        const receiptsRef = collection(db, 'ClientReceipts'); // Fetch from ClientReceipts
-        // Order by creation date, newest first
-        const q = query(receiptsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const fetchedReceipts: ClientReceipt[] = [];
-        querySnapshot.forEach((doc) => {
-          fetchedReceipts.push({ id: doc.id, ...doc.data() } as ClientReceipt);
-        });
-        setReceipts(fetchedReceipts);
-        setFilteredReceipts(fetchedReceipts); // Initially show all
-      } catch (error) {
-        console.error("Error fetching client receipts:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchReceipts = async () => {
+    setLoading(true);
+    try {
+      const receiptsRef = collection(db, 'ClientReceipts'); // Fetch from ClientReceipts
+      // Order by creation date, newest first, and limit
+      const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
+      const querySnapshot = await getDocs(q);
+      const fetchedReceipts: ClientReceipt[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedReceipts.push({ id: doc.id, ...doc.data() } as ClientReceipt);
+      });
+      setReceipts(fetchedReceipts);
+      // setFilteredReceipts(fetchedReceipts); // Moved to filter useEffect
+    } catch (error) {
+      console.error("Error fetching client receipts:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchReceipts();
-  }, [toast]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // Fetch on initial load
 
   // --- Filter Logic ---
   useEffect(() => {
@@ -121,16 +124,23 @@ function BillContent() {
 
     // Filter by Issue Date
     if (dateFilter && isValid(dateFilter)) {
-      const filterDateStr = format(dateFilter, 'yyyy-MM-dd');
-      currentReceipts = currentReceipts.filter(receipt => {
-        // Parse ISO string date from Firestore before formatting
-        const issueDate = parseISO(receipt.issueDate);
-        return isValid(issueDate) && format(issueDate, 'yyyy-MM-dd') === filterDateStr;
-      });
+        const filterDateStr = format(dateFilter, 'yyyy-MM-dd');
+        currentReceipts = currentReceipts.filter(receipt => {
+            if (!receipt.issueDate) return false; // Skip receipts without an issue date
+            try {
+                 // Parse ISO string date from Firestore before formatting
+                const issueDate = parseISO(receipt.issueDate);
+                // Check if parsing was successful and the date is valid
+                return isValid(issueDate) && format(issueDate, 'yyyy-MM-dd') === filterDateStr;
+            } catch (e) {
+                console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
+                return false; // Treat invalid date formats as non-matching
+            }
+        });
     }
 
     setFilteredReceipts(currentReceipts);
-  }, [shopNameFilter, clientNameFilter, phoneNumberFilter, dateFilter, receipts]);
+  }, [shopNameFilter, clientNameFilter, phoneNumberFilter, dateFilter, receipts]); // Rerun when filters or base receipts change
 
   // --- Navigation Handlers ---
   const handleViewReceipt = (receipt: ClientReceipt) => {
@@ -143,11 +153,8 @@ function BillContent() {
     try {
       const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); // Reference by ID
       await deleteDoc(receiptRef);
-      // Update state locally to remove the deleted receipt
-      const updatedReceipts = receipts.filter((r) => r.id !== receiptToDelete.id);
-      setReceipts(updatedReceipts);
-      // Also update filtered receipts if necessary (useEffect dependency will handle this)
-      // setFilteredReceipts(filteredReceipts.filter((r) => r.id !== receiptToDelete.id));
+      // Fetch receipts again after deletion
+       await fetchReceipts();
       toast({ title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.` });
     } catch (error) {
       console.error("Error deleting receipt:", error);
@@ -170,21 +177,21 @@ function BillContent() {
               type="text"
               placeholder="Filter by Shop Name"
               value={shopNameFilter}
-              onChange={(e) => setShopNameFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setShopNameFilter(e.target.value)}
                className="rounded-md"
             />
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e) => setClientNameFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)}
                className="rounded-md"
             />
             <Input
               type="text" // Keep as text for flexibility
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
-              onChange={(e) => setPhoneNumberFilter(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setPhoneNumberFilter(e.target.value)}
                className="rounded-md"
             />
             <Popover>
@@ -217,7 +224,17 @@ function BillContent() {
               <p className="text-muted-foreground text-center">Loading receipts...</p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
-                {filteredReceipts.map((receipt) => (
+                {filteredReceipts.map((receipt) => {
+                   let formattedIssueDate = 'Invalid Date';
+                   if (receipt.issueDate && isValid(parseISO(receipt.issueDate))) {
+                       try {
+                           formattedIssueDate = format(parseISO(receipt.issueDate), 'PPP');
+                       } catch (e) {
+                            console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
+                       }
+                   }
+
+                  return (
                   <li
                     key={receipt.id} // Use Firestore document ID as key
                     className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
@@ -228,7 +245,7 @@ function BillContent() {
                          {receipt.shopName && <span className="text-sm text-muted-foreground"> ({receipt.shopName})</span>}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Issue Date: {isValid(parseISO(receipt.issueDate)) ? format(parseISO(receipt.issueDate), 'PPP') : 'Invalid Date'}
+                        Issue Date: {formattedIssueDate}
                       </p>
                        <p className="text-sm text-muted-foreground">
                          Metal: {receipt.metalType}
@@ -275,7 +292,8 @@ function BillContent() {
                       </AlertDialog>
                     </div>
                   </li>
-                ))}
+                );
+              })}
               </ul>
             ) : (
               <p className="text-muted-foreground text-center">No receipts found matching your criteria.</p>

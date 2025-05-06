@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore'; // Added limit
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -35,43 +35,62 @@ function AdminReceiptContent() {
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]); // Added state for filtered clients
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
+   // --- Fetch Clients ---
+   const fetchClients = async () => {
+     setLoading(true);
+     try {
+       const clientsRef = collection(db, 'ClientDetails');
+       // Order by creation time, newest first, and limit initial load
+       const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50 for performance
+       const querySnapshot = await getDocs(q);
+       const fetchedClients: Client[] = [];
+       querySnapshot.forEach((doc) => {
+         fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
+       });
+       setClients(fetchedClients);
+       // Initialize filtered clients
+       // setFilteredClients(fetchedClients); // Moved to useEffect for filtering
+     } catch (error) {
+       console.error("Error fetching clients from Firestore:", error);
+       toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
+     } finally {
+       setLoading(false);
+     }
+   };
+
   useEffect(() => {
-    // Load clients from Firestore on component mount
-    const fetchClients = async () => {
-      setLoading(true);
-      try {
-        // Update collection name to 'ClientDetails'
-        const clientsRef = collection(db, 'ClientDetails');
-        // Order by creation time, newest first. Adjust 'createdAt' if your field name differs.
-        const q = query(clientsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const fetchedClients: Client[] = [];
-        querySnapshot.forEach((doc) => {
-          // Use doc.id as the client's unique ID
-          fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
-        });
-        setClients(fetchedClients);
-      } catch (error) {
-        console.error("Error fetching clients from Firestore:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchClients();
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // Fetch on initial load
 
-  const filteredClients = clients.filter((client) => {
-    const shopNameMatch = client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase()) ?? true;
-    const clientNameMatch = client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase()) ?? true;
-    const phoneNumberMatch = client.phoneNumber?.includes(phoneNumberFilter) ?? true;
-    return shopNameMatch && clientNameMatch && phoneNumberMatch;
-  });
+  // --- Filter Logic ---
+  useEffect(() => {
+     let currentClients = [...clients];
+
+     if (shopNameFilter.trim() !== '') {
+        currentClients = currentClients.filter((client) =>
+          client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase())
+        );
+     }
+     if (clientNameFilter.trim() !== '') {
+         currentClients = currentClients.filter((client) =>
+           client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase())
+         );
+     }
+      if (phoneNumberFilter.trim() !== '') {
+        currentClients = currentClients.filter((client) =>
+          client.phoneNumber?.includes(phoneNumberFilter)
+        );
+      }
+
+     setFilteredClients(currentClients); // Update filtered list based on filters and base clients
+   }, [shopNameFilter, clientNameFilter, phoneNumberFilter, clients]); // Rerun when filters or clients change
+
 
   const handleClientSelection = (client: Client) => {
     // Navigate to Admin Receipt Details page with client ID and Name

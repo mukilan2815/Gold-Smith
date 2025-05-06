@@ -4,7 +4,7 @@
 import type { ChangeEvent } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData } from 'firebase/firestore'; // Added DocumentData
+import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData, limit } from 'firebase/firestore'; // Added DocumentData, limit
 import { format, isValid, parseISO, startOfDay, endOfDay } from 'date-fns'; // Added startOfDay, endOfDay
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
@@ -65,41 +65,44 @@ function AdminBillContent() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // --- Fetch Receipts from Firestore ---
-  useEffect(() => {
-    const fetchReceipts = async () => {
-      setLoading(true);
-      try {
-        const receiptsRef = collection(db, 'AdminReceipts');
-        const q = query(receiptsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const fetchedReceipts: AdminReceipt[] = [];
-        querySnapshot.forEach((doc) => {
-           // Ensure data matches the AdminReceipt interface, provide defaults if needed
-          const data = doc.data() as DocumentData; // Use DocumentData initially
-          fetchedReceipts.push({
-            id: doc.id,
-            clientId: data.clientId || '',
-            clientName: data.clientName || 'Unknown Client',
-            given: data.given || null,
-            received: data.received || null,
-            status: data.status || 'empty',
-            createdAt: data.createdAt || Timestamp.now(), // Provide default timestamp
-            updatedAt: data.updatedAt || Timestamp.now(), // Provide default timestamp
-          } as AdminReceipt); // Cast to AdminReceipt
-        });
-        setReceipts(fetchedReceipts);
-        setFilteredReceipts(fetchedReceipts); // Initially show all
-      } catch (error) {
-        console.error("Error fetching admin receipts:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
-      } finally {
-        setLoading(false);
-      }
-    };
+   // --- Fetch Receipts from Firestore ---
+   const fetchReceipts = async () => {
+     setLoading(true);
+     try {
+       const receiptsRef = collection(db, 'AdminReceipts');
+       // Order by creation time and limit initial fetch
+       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
+       const querySnapshot = await getDocs(q);
+       const fetchedReceipts: AdminReceipt[] = [];
+       querySnapshot.forEach((doc) => {
+          // Ensure data matches the AdminReceipt interface, provide defaults if needed
+         const data = doc.data() as DocumentData; // Use DocumentData initially
+         fetchedReceipts.push({
+           id: doc.id,
+           clientId: data.clientId || '',
+           clientName: data.clientName || 'Unknown Client',
+           given: data.given || null,
+           received: data.received || null,
+           status: data.status || 'empty',
+           createdAt: data.createdAt || Timestamp.now(), // Provide default timestamp
+           updatedAt: data.updatedAt || Timestamp.now(), // Provide default timestamp
+         } as AdminReceipt); // Cast to AdminReceipt
+       });
+       setReceipts(fetchedReceipts);
+       // setFilteredReceipts(fetchedReceipts); // Moved to filter useEffect
+     } catch (error) {
+       console.error("Error fetching admin receipts:", error);
+       toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
+     } finally {
+       setLoading(false);
+     }
+   };
 
+
+  useEffect(() => {
     fetchReceipts();
-  }, [toast]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // Fetch receipts on initial load
 
   // --- Filter Logic ---
   useEffect(() => {
@@ -132,7 +135,7 @@ function AdminBillContent() {
 
 
     setFilteredReceipts(currentReceipts);
-  }, [clientNameFilter, dateFilter, receipts]);
+  }, [clientNameFilter, dateFilter, receipts]); // Rerun filter when filters or base receipts change
 
    // --- Determine Receipt Status Variant for Badge ---
    const getStatusVariant = (status: 'complete' | 'incomplete' | 'empty'): 'default' | 'secondary' | 'destructive' | 'outline' => {

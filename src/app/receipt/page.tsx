@@ -2,12 +2,12 @@
 'use client';
 
 import Layout from '@/components/Layout';
-import {useState, useEffect} from 'react';
-import {useRouter} from 'next/navigation';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
-import {ScrollArea} from '@/components/ui/scroll-area';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,9 +19,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { collection, getDocs, query, orderBy, doc, deleteDoc } from 'firebase/firestore'; // Import deleteDoc
+import { collection, getDocs, query, orderBy, doc, deleteDoc, limit } from 'firebase/firestore'; // Import deleteDoc and limit
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils'; // Import cn for AlertDialog styling
 
 // Define the Client interface matching Firestore structure
 interface Client {
@@ -47,49 +48,66 @@ function ReceiptContent() {
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]); // State for filtered clients
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
+  // Fetch Clients Function
+  const fetchClients = async () => {
+    setLoading(true);
+    try {
+      const clientsRef = collection(db, 'ClientDetails');
+      // Order by creation time and limit the initial fetch
+      const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
+      const querySnapshot = await getDocs(q);
+      const fetchedClients: Client[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
+      });
+      setClients(fetchedClients);
+      // setFilteredClients(fetchedClients); // Initialize filtered list
+    } catch (error) {
+      console.error("Error fetching clients from Firestore:", error);
+      toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   useEffect(() => {
-    // Load clients from Firestore on component mount
-    const fetchClients = async () => {
-      setLoading(true);
-      try {
-        const clientsRef = collection(db, 'ClientDetails'); // Updated collection name
-        // Order by creation time, newest first. Adjust 'createdAt' if your field name differs.
-        const q = query(clientsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const fetchedClients: Client[] = [];
-        querySnapshot.forEach((doc) => {
-          // Use doc.id as the client's unique ID
-          fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
-        });
-        setClients(fetchedClients);
-      } catch (error) {
-        console.error("Error fetching clients from Firestore:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchClients();
-  }, [toast]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]); // Fetch clients on initial load
 
 
-  const filteredClients = clients.filter((client) => {
-    const shopNameMatch = client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase()) ?? true;
-    const clientNameMatch = client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase()) ?? true;
-    const phoneNumberMatch = client.phoneNumber?.includes(phoneNumberFilter) ?? true;
-    return shopNameMatch && clientNameMatch && phoneNumberMatch;
-  });
+  // Filter Logic - Now runs on clients state change or filter change
+  useEffect(() => {
+    let currentClients = [...clients];
+
+    if (shopNameFilter.trim() !== '') {
+       currentClients = currentClients.filter((client) =>
+         client.shopName?.toLowerCase().includes(shopNameFilter.toLowerCase())
+       );
+    }
+    if (clientNameFilter.trim() !== '') {
+        currentClients = currentClients.filter((client) =>
+          client.clientName?.toLowerCase().includes(clientNameFilter.toLowerCase())
+        );
+    }
+     if (phoneNumberFilter.trim() !== '') {
+       currentClients = currentClients.filter((client) =>
+         client.phoneNumber?.includes(phoneNumberFilter)
+       );
+     }
+
+    setFilteredClients(currentClients);
+  }, [shopNameFilter, clientNameFilter, phoneNumberFilter, clients]); // Rerun filter when filters or base clients change
 
 
   const handleClientSelection = (client: Client) => {
     // Navigate to Receipt Page 2 with client details
-    // Pass client ID instead of just name for potential future use
     router.push(`/receipt/details?clientId=${client.id}&clientName=${encodeURIComponent(client.clientName)}`);
   };
 
@@ -98,7 +116,8 @@ function ReceiptContent() {
      try {
        const clientRef = doc(db, 'ClientDetails', clientToDelete.id); // Use Firestore ID
        await deleteDoc(clientRef);
-       setClients(clients.filter((c) => c.id !== clientToDelete.id)); // Update state
+       // Refetch clients after deletion to update the list
+       await fetchClients();
        toast({ title: 'Success', description: `Client ${clientToDelete.clientName} deleted.` });
      } catch (error) {
        console.error("Error deleting client:", error);
@@ -190,7 +209,8 @@ function ReceiptContent() {
                            <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                              <AlertDialogAction
-                               onClick={() => handleDeleteClient(client)}
+                                onClick={() => handleDeleteClient(client)}
+                                className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")} // Style the action button
                              >
                                Continue
                              </AlertDialogAction>
@@ -210,4 +230,3 @@ function ReceiptContent() {
     </div>
   );
 }
-

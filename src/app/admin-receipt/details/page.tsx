@@ -5,7 +5,7 @@ import type { ChangeEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format, isValid, parseISO } from 'date-fns';
-import { CalendarIcon, PlusCircle, Trash2 } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Trash2, Save } from 'lucide-react'; // Added Save
 
 import Layout from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -75,8 +75,10 @@ const calculateGivenTotal = (item: GivenItem): number => {
   const pureWeight = parseFloat(item.pureWeight) || 0;
   const purePercent = parseFloat(item.purePercent) || 0;
   const melting = parseFloat(item.melting) || 0;
-  if (melting === 0) return 0;
+  if (melting === 0) return 0; // Avoid division by zero
+  // Round intermediate calculation for potentially better precision
   const total = (pureWeight * purePercent) / melting;
+  // Round final result to 3 decimal places
   return parseFloat(total.toFixed(3));
 };
 
@@ -90,10 +92,7 @@ const calculateReceivedSubTotal = (item: ReceivedItem): number => {
 const calculateReceivedTotal = (item: ReceivedItem): number => {
   const subTotal = calculateReceivedSubTotal(item);
   const makingChargePercent = parseFloat(item.makingChargePercent) || 0;
-  // Corrected calculation: Total is making charge value, not final weight
-  // Assuming 'Total' here means the additional charge calculation, not the final total weight.
-  // If Total means final weight + making charge value, adjust accordingly.
-  // Let's assume Total = SubTotal * (MakingCharge% / 100) as per original user request interpretation
+  // Total = SubTotal * (MakingCharge% / 100)
   const total = subTotal * (makingChargePercent / 100);
   return parseFloat(total.toFixed(3));
 };
@@ -130,65 +129,61 @@ function AdminReceiptDetailsContent() {
   // --- Fetch Existing Data from Firestore ---
   useEffect(() => {
     const fetchReceiptData = async () => {
-      if (clientId && currentReceiptId) {
-        setLoading(true);
+      if (!clientId) {
+        toast({ variant: "destructive", title: "Error", description: "Client ID is missing." });
+        router.push('/admin-receipt');
+        setLoading(false);
+        return;
+      }
+
+      // Only set loading if we expect to fetch (i.e., receiptIdParam exists)
+      setLoading(!!receiptIdParam);
+
+      if (receiptIdParam) {
         try {
-          const receiptRef = doc(db, 'AdminReceipts', currentReceiptId);
+          const receiptRef = doc(db, 'AdminReceipts', receiptIdParam);
           const docSnap = await getDoc(receiptRef);
 
           if (docSnap.exists()) {
             const data = docSnap.data() as AdminReceiptData; // Cast to new interface
             // Load Given data
-            if (data.given) {
-              setDateGiven(data.given.date && isValid(parseISO(data.given.date)) ? parseISO(data.given.date) : undefined);
-              // Add back UI 'id' to items
-              setGivenItems(data.given.items && data.given.items.length > 0 ? data.given.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            } else {
-              setDateGiven(undefined);
-              setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            }
+            setDateGiven(data.given?.date && isValid(parseISO(data.given.date)) ? parseISO(data.given.date) : undefined);
+            setGivenItems(data.given?.items && data.given.items.length > 0 ? data.given.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+
             // Load Received data
-            if (data.received) {
-                setDateReceived(data.received.date && isValid(parseISO(data.received.date)) ? parseISO(data.received.date) : undefined);
-                // Add back UI 'id' to items
-                setReceivedItems(data.received.items && data.received.items.length > 0 ? data.received.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-            } else {
-               setDateReceived(undefined);
-               setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-            }
+            setDateReceived(data.received?.date && isValid(parseISO(data.received.date)) ? parseISO(data.received.date) : undefined);
+            setReceivedItems(data.received?.items && data.received.items.length > 0 ? data.received.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+            setCurrentReceiptId(receiptIdParam); // Confirm current ID
           } else {
-            console.warn(`Receipt document ${currentReceiptId} not found. Starting new.`);
+            console.warn(`Receipt document ${receiptIdParam} not found. Starting new.`);
             toast({ variant: "default", title: "New Receipt", description: "Creating a new admin receipt." });
-            setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-            setCurrentReceiptId(null); // Ensure we are creating a new one
+            resetFormForNewReceipt();
           }
         } catch (error) {
           console.error("Error fetching admin receipt from Firestore:", error);
           toast({ variant: "destructive", title: "Error", description: "Could not load receipt data. Starting new." });
-           setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-           setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-           setCurrentReceiptId(null);
+          resetFormForNewReceipt();
         } finally {
           setLoading(false);
         }
-      } else if (clientId) {
-          // Creating a new receipt (no receiptId provided)
-          setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-          setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-          setDateGiven(undefined);
-          setDateReceived(undefined);
-          setCurrentReceiptId(null); // Explicitly null for new receipt
-          setLoading(false);
       } else {
-        toast({ variant: "destructive", title: "Error", description: "Client ID is missing." });
-        router.push('/admin-receipt');
-        setLoading(false);
+          // Creating a new receipt (no receiptId provided)
+          resetFormForNewReceipt();
+          setLoading(false); // No fetching needed, so stop loading
       }
     };
 
     fetchReceiptData();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, receiptIdParam, router, toast]); // Depend on original receiptId from params
+
+  const resetFormForNewReceipt = () => {
+     setGivenItems([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+     setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+     setDateGiven(undefined);
+     setDateReceived(undefined);
+     setCurrentReceiptId(null); // Explicitly null for new receipt
+   };
 
 
   // --- Event Handlers ---
@@ -240,7 +235,7 @@ function AdminReceiptDetailsContent() {
   };
 
 
-  const handleSave = async (saveType: 'given' | 'received') => {
+  const handleSave = (saveType: 'given' | 'received') => { // Removed async
     if (!clientId || !clientName) {
       toast({ variant: 'destructive', title: 'Error', description: 'Client information is missing.' });
       return;
@@ -265,8 +260,8 @@ function AdminReceiptDetailsContent() {
        )
        .map(({ id, ...rest }) => rest); // Remove UI id
 
-    let hasGivenData = finalGivenItems.length > 0; // Use let instead of const
-    let hasReceivedData = finalReceivedItems.length > 0; // Use let instead of const
+    let hasGivenData = finalGivenItems.length > 0;
+    let hasReceivedData = finalReceivedItems.length > 0;
 
     // Validate date based on the tab being saved AND if data exists in that tab
     if (saveType === 'given' && hasGivenData && !dateGiven) {
@@ -278,18 +273,22 @@ function AdminReceiptDetailsContent() {
       return;
     }
 
-    // Validate that the current tab being saved has data
-     if (saveType === 'given' && !hasGivenData) {
-       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Given" items before saving this section.' });
+    // Validate that the current tab being saved has data, unless clearing the tab intentionally
+     if (saveType === 'given' && !hasGivenData && givenItems.some(i => i.productName || i.pureWeight || i.purePercent || i.melting)) {
+       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Given" items before saving this section, or clear all rows if you wish to remove this section.' });
        return;
     }
-     if (saveType === 'received' && !hasReceivedData) {
-       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Received" items before saving this section.' });
+     if (saveType === 'received' && !hasReceivedData && receivedItems.some(i => i.productName || i.finalOrnamentsWt || i.stoneWeight || i.makingChargePercent)) {
+       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please enter details for "Received" items before saving this section, or clear all rows if you wish to remove this section.' });
        return;
     }
 
 
     setIsSaving(true);
+     toast({
+       title: `Saving ${saveType} data...`,
+       description: 'Please wait.',
+     });
 
      // Calculate totals based on filtered items
     const totalGivenPureWeightCalc = finalGivenItems.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
@@ -309,127 +308,107 @@ function AdminReceiptDetailsContent() {
     let newReceivedData: ReceivedData | null = null;
 
     if (saveType === 'given') {
-      if (hasGivenData) {
-        newGivenData = {
+        newGivenData = hasGivenData ? {
           date: dateGiven ? dateGiven.toISOString() : null,
           items: finalGivenItems,
           totalPureWeight: parseFloat(totalGivenPureWeightCalc.toFixed(3)),
           total: parseFloat(totalGivenTotalCalc.toFixed(3)),
-        };
+        } : null;
         updateData.given = newGivenData;
-      } else {
-          updateData.given = null; // Explicitly set to null if cleared
-      }
     } else { // saveType === 'received'
-       if (hasReceivedData) {
-        newReceivedData = {
+        newReceivedData = hasReceivedData ? {
           date: dateReceived ? dateReceived.toISOString() : null,
           items: finalReceivedItems,
           totalOrnamentsWt: parseFloat(totalReceivedFinalOrnamentsWtCalc.toFixed(3)),
           totalStoneWeight: parseFloat(totalReceivedStoneWeightCalc.toFixed(3)),
           totalSubTotal: parseFloat(totalReceivedSubTotalCalc.toFixed(3)),
           total: parseFloat(totalReceivedTotalCalc.toFixed(3)),
-        };
+        } : null;
         updateData.received = newReceivedData;
-      } else {
-          updateData.received = null; // Explicitly set to null if cleared
-      }
     }
 
-    // Determine status based on the data *being saved* and potentially *existing* data
-    let finalStatus: 'complete' | 'incomplete' | 'empty' = 'empty';
+    // --- Firestore Operation ---
+    const performSave = async () => { // Keep async here for Firestore operations
+        let docRef;
+        let tempCurrentReceiptId = currentReceiptId; // Use a temporary variable
 
+        if (tempCurrentReceiptId) {
+            // --- Updating Existing Receipt ---
+            docRef = doc(db, 'AdminReceipts', tempCurrentReceiptId);
+            const existingDocSnap = await getDoc(docRef); // Need await here
 
-    try {
-      let docRef;
-      let tempCurrentReceiptId = currentReceiptId; // Use a temporary variable
+            if (existingDocSnap.exists()) {
+                const existingData = existingDocSnap.data() as Partial<AdminReceiptData>;
 
-      if (tempCurrentReceiptId) {
-        // --- Updating Existing Receipt ---
-        docRef = doc(db, 'AdminReceipts', tempCurrentReceiptId);
-        const existingDocSnap = await getDoc(docRef);
+                // Merge: Preserve the other tab's data if it exists and isn't being saved now
+                let finalStatus: 'complete' | 'incomplete' | 'empty';
+                const finalGiven = (saveType === 'given') ? newGivenData : (existingData.given ?? null);
+                const finalReceived = (saveType === 'received') ? newReceivedData : (existingData.received ?? null);
 
-        if (existingDocSnap.exists()) {
-          const existingData = existingDocSnap.data() as Partial<AdminReceiptData>; // Use partial as some fields might be null
+                 if (finalGiven && finalReceived) {
+                   finalStatus = 'complete';
+                 } else if (finalGiven || finalReceived) {
+                   finalStatus = 'incomplete';
+                 } else {
+                    finalStatus = 'empty';
+                 }
 
-          // Merge: Preserve the other tab's data if it exists and isn't being saved now
-          if (saveType === 'received' && updateData.given === undefined && existingData.given) {
-             updateData.given = existingData.given;
-             // Need to re-evaluate hasGivenData based on existing data for status calculation
-             hasGivenData = existingData.given && existingData.given.items.length > 0;
-          }
-          if (saveType === 'given' && updateData.received === undefined && existingData.received) {
-             updateData.received = existingData.received;
-             // Need to re-evaluate hasReceivedData based on existing data for status calculation
-              hasReceivedData = existingData.received && existingData.received.items.length > 0;
-          }
+                 const dataToUpdate = {
+                      ...updateData, // contains the section being saved and updatedAt
+                      given: finalGiven, // ensure both sections are included for status calculation
+                      received: finalReceived,
+                      status: finalStatus,
+                  };
 
-           // Determine final status after potential merge
-            if (hasGivenData && hasReceivedData) {
-              finalStatus = 'complete';
-            } else if (hasGivenData || hasReceivedData) {
-              finalStatus = 'incomplete';
+                await updateDoc(docRef, dataToUpdate); // Need await here
+                toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
+
             } else {
-               finalStatus = 'empty';
+                // If the doc doesn't exist unexpectedly, treat as creation
+                console.warn(`Document ${tempCurrentReceiptId} not found during update, will create new.`);
+                tempCurrentReceiptId = null; // Set temp ID to null for creation logic
+                setCurrentReceiptId(null); // Update state
+                // Fall through to creation logic
             }
-            updateData.status = finalStatus;
-
-
-           await updateDoc(docRef, updateData);
-           toast({ title: 'Success', description: `Admin receipt ${saveType} data updated.` });
-
-        } else {
-          // If the doc doesn't exist unexpectedly, treat as creation
-          console.warn(`Document ${tempCurrentReceiptId} not found during update, will create new.`);
-          setCurrentReceiptId(null); // Force creation logic below using state setter
-          tempCurrentReceiptId = null; // Update temp variable as well
-           // Fall through to creation logic
-        }
-      }
-
-      // --- Creating New Receipt (or if update failed finding doc) ---
-       if (!tempCurrentReceiptId) {
-         // Determine status based only on the current save action
-         if (saveType === 'given' && hasGivenData) finalStatus = 'incomplete';
-         if (saveType === 'received' && hasReceivedData) finalStatus = 'incomplete';
-         // If somehow both were processed in this non-existent scenario, it would be 'complete', but that shouldn't happen here.
-
-         const newReceiptData: AdminReceiptData = {
-            clientId: clientId,
-            clientName: clientName,
-            given: newGivenData, // Use the calculated data or null
-            received: newReceivedData, // Use the calculated data or null
-            status: finalStatus,
-            createdAt: serverTimestamp() as Timestamp, // Add createdAt timestamp
-            updatedAt: serverTimestamp() as Timestamp, // Add updatedAt timestamp
-         };
-
-
-        // Explicitly set the *other* tab's data to null if it wasn't part of this save
-        if (saveType === 'given') {
-            newReceiptData.received = null;
-        } else { // saveType === 'received'
-            newReceiptData.given = null;
         }
 
-        const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
-        await setDoc(newReceiptRef, newReceiptData);
-        setCurrentReceiptId(newReceiptRef.id); // Store the new ID for subsequent saves within this session
-        toast({ title: 'Success', description: `Admin receipt ${saveType} data saved.` });
-         // Update URL to include the new receiptId for potential refresh/bookmarking
-         router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName)}&receiptId=${newReceiptRef.id}`, undefined);
+        // --- Creating New Receipt (or if update failed finding doc) ---
+         if (!tempCurrentReceiptId) {
+             let finalStatus: 'complete' | 'incomplete' | 'empty' = 'empty';
+             if (saveType === 'given' && hasGivenData) finalStatus = 'incomplete';
+             if (saveType === 'received' && hasReceivedData) finalStatus = 'incomplete';
 
-      }
-      // --- Post-Save ---
-      // Maybe refetch or update local state if complex interactions are needed.
-      // For now, relying on the next load or navigation to show updated list data.
+             const newReceiptData: AdminReceiptData = {
+                clientId: clientId!, // Assert non-null with ! as it's checked earlier
+                clientName: clientName!, // Assert non-null
+                given: newGivenData,
+                received: newReceivedData,
+                status: finalStatus,
+                createdAt: serverTimestamp() as Timestamp,
+                updatedAt: serverTimestamp() as Timestamp,
+             };
 
-    } catch (error) {
-      console.error("Error saving admin receipt to Firestore:", error);
-      toast({ variant: 'destructive', title: 'Error', description: `Failed to save ${saveType} receipt data.` });
-    } finally {
-      setIsSaving(false);
-    }
+             // Explicitly set the *other* tab's data to null if it wasn't part of this save
+             if (saveType === 'given') newReceiptData.received = null;
+             else newReceiptData.given = null;
+
+            const newReceiptRef = doc(collection(db, 'AdminReceipts')); // Auto-generate ID
+            await setDoc(newReceiptRef, newReceiptData); // Need await here
+            setCurrentReceiptId(newReceiptRef.id); // Store the new ID
+            toast({ title: 'Success', description: `Admin receipt ${saveType} data saved.` });
+            // Update URL to include the new receiptId
+            router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${newReceiptRef.id}`, undefined);
+         }
+    };
+
+     performSave()
+        .catch((error) => {
+             console.error("Error saving admin receipt to Firestore:", error);
+             toast({ variant: 'destructive', title: 'Error', description: `Failed to save ${saveType} receipt data.` });
+        })
+        .finally(() => {
+            setIsSaving(false);
+        });
   };
 
   // --- Calculations for UI Totals ---
@@ -579,14 +558,14 @@ function AdminReceiptDetailsContent() {
                                    placeholder="0.00"
                                   />
                                </td>
-                               <td className="p-2 border text-right">{item.total.toFixed(3)}</td>
+                               <td className="p-2 border text-right bg-muted/30">{item.total.toFixed(3)}</td>
                                <td className="p-2 border text-center">
                                  <Button
                                    variant="ghost"
                                    size="icon"
                                    onClick={() => handleRemoveItem(item.id, 'given')}
                                    disabled={givenItems.length <= 1}
-                                   className="text-destructive hover:text-destructive/80"
+                                   className="text-destructive hover:text-destructive/80 h-8 w-8"
                                  >
                                    <Trash2 className="h-4 w-4" />
                                  </Button>
@@ -610,7 +589,7 @@ function AdminReceiptDetailsContent() {
                            <PlusCircle className="mr-2 h-4 w-4" /> Add Given Item
                          </Button>
                          <Button onClick={() => handleSave('given')} disabled={isSaving}>
-                           {isSaving ? 'Saving...' : 'Save Given Data'}
+                            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save Given Data'}
                          </Button>
                      </div>
                    </CardContent>
@@ -698,7 +677,7 @@ function AdminReceiptDetailsContent() {
                                             placeholder="0.000"
                                           />
                                         </td>
-                                        <td className="p-2 border text-right">{item.subTotal.toFixed(3)}</td>
+                                        <td className="p-2 border text-right bg-muted/30">{item.subTotal.toFixed(3)}</td>
                                         <td className="p-2 border">
                                           <Input
                                             type="number"
@@ -709,14 +688,14 @@ function AdminReceiptDetailsContent() {
                                             placeholder="0.00"
                                           />
                                         </td>
-                                        <td className="p-2 border text-right">{item.total.toFixed(3)}</td>
+                                        <td className="p-2 border text-right bg-muted/30">{item.total.toFixed(3)}</td>
                                          <td className="p-2 border text-center">
                                             <Button
                                               variant="ghost"
                                               size="icon"
                                               onClick={() => handleRemoveItem(item.id, 'received')}
                                               disabled={receivedItems.length <= 1}
-                                              className="text-destructive hover:text-destructive/80"
+                                              className="text-destructive hover:text-destructive/80 h-8 w-8"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -741,7 +720,7 @@ function AdminReceiptDetailsContent() {
                                <PlusCircle className="mr-2 h-4 w-4" /> Add Received Item
                              </Button>
                              <Button onClick={() => handleSave('received')} disabled={isSaving}>
-                               {isSaving ? 'Saving...' : 'Save Received Data'}
+                                <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save Received Data'}
                              </Button>
                         </div>
                    </CardContent>

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; // Import Firestore functions
+import { collection, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore'; // Import writeBatch for potential future batch operations
 import { db } from '@/lib/firebase'; // Import Firestore instance
 
 export default function NewClientPage() {
@@ -28,7 +28,7 @@ function NewClientContent() {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  const handleSaveClient = async () => {
+  const handleSaveClient = () => { // Removed async as addDoc returns a promise handled by .then/.catch
     // Basic client-side validation
     if (
       !shopName.trim() ||
@@ -45,43 +45,48 @@ function NewClientContent() {
     }
 
     setIsSaving(true);
-
-    try {
-      const newClient = {
-        shopName: shopName.trim(),
-        clientName: clientName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        address: address.trim(),
-        createdAt: serverTimestamp(), // Use server timestamp for consistency
-      };
-
-      // Add document to Firestore 'ClientDetails' collection
-      // Using addDoc for auto-generated ID
-      const docRef = await addDoc(collection(db, 'ClientDetails'), newClient);
+    // Give immediate feedback
+    toast({
+        title: 'Saving Client...',
+        description: 'Please wait.',
+    });
 
 
-      toast({
-        title: 'Client Saved!',
-        description: `${clientName}'s details saved successfully.`,
-      });
+    const newClient = {
+      shopName: shopName.trim(),
+      clientName: clientName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      address: address.trim(),
+      createdAt: serverTimestamp(), // Use server timestamp for consistency
+    };
 
-      // Reset form fields after successful save
-      setShopName('');
-      setClientName('');
-      setPhoneNumber('');
-      setAddress('');
+    // Add document to Firestore 'ClientDetails' collection
+    // Using addDoc for auto-generated ID
+    addDoc(collection(db, 'ClientDetails'), newClient)
+      .then((docRef) => {
+          toast({
+            title: 'Client Saved!',
+            description: `${clientName}'s details saved successfully. ID: ${docRef.id}`, // Include ID for reference
+          });
 
-    } catch (error: any) {
-      console.error("Error adding client to Firestore: ", error);
-      toast({
-        variant: 'destructive',
-        title: 'Save Error',
-        description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
-      });
-    } finally {
-      // Ensure saving state is reset regardless of success or failure
-      setIsSaving(false);
-    }
+          // Reset form fields after successful save
+          setShopName('');
+          setClientName('');
+          setPhoneNumber('');
+          setAddress('');
+      })
+      .catch((error: any) => {
+           console.error("Error adding client to Firestore: ", error);
+           toast({
+             variant: 'destructive',
+             title: 'Save Error',
+             description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
+           });
+       })
+       .finally(() => {
+           // Ensure saving state is reset regardless of success or failure
+           setIsSaving(false);
+       });
   };
 
   return (
