@@ -265,8 +265,8 @@ function AdminReceiptDetailsContent() {
        )
        .map(({ id, ...rest }) => rest); // Remove UI id
 
-    const hasGivenData = finalGivenItems.length > 0;
-    const hasReceivedData = finalReceivedItems.length > 0;
+    let hasGivenData = finalGivenItems.length > 0; // Use let instead of const
+    let hasReceivedData = finalReceivedItems.length > 0; // Use let instead of const
 
     // Validate date based on the tab being saved AND if data exists in that tab
     if (saveType === 'given' && hasGivenData && !dateGiven) {
