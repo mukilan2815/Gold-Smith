@@ -55,10 +55,10 @@ function NewClientContent() {
         createdAt: serverTimestamp(), // Use server timestamp for consistency
       };
 
-      // Add document to Firestore 'Clients' collection
-      // This operation's speed heavily depends on network and Firebase backend status.
-      const docRef = await addDoc(collection(db, 'Clients'), newClient);
-      // console.log('Client added with ID:', docRef.id); // Optional: for debugging
+      // Add document to Firestore 'ClientDetails' collection
+      // Using addDoc for auto-generated ID
+      const docRef = await addDoc(collection(db, 'ClientDetails'), newClient);
+
 
       toast({
         title: 'Client Saved!',
@@ -76,7 +76,7 @@ function NewClientContent() {
       toast({
         variant: 'destructive',
         title: 'Save Error',
-        description: `Could not save client details. Please check your network connection and Firebase status. Error: ${error.message || 'Unknown error'}`,
+        description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
       });
     } finally {
       // Ensure saving state is reset regardless of success or failure

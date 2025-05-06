@@ -19,7 +19,7 @@ interface Client {
   clientName: string;
   phoneNumber: string;
   address: string;
-  // Add any other fields if they exist in your Firestore 'Clients' documents
+  // Add any other fields if they exist in your Firestore 'ClientDetails' documents
 }
 
 export default function AdminReceiptPage() {
@@ -44,9 +44,10 @@ function AdminReceiptContent() {
     const fetchClients = async () => {
       setLoading(true);
       try {
-        const clientsRef = collection(db, 'Clients');
-        // Optionally, order clients (e.g., by clientName)
-        const q = query(clientsRef, orderBy('clientName')); // Order by client name
+        // Update collection name to 'ClientDetails'
+        const clientsRef = collection(db, 'ClientDetails');
+        // Order by creation time, newest first. Adjust 'createdAt' if your field name differs.
+        const q = query(clientsRef, orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
         const fetchedClients: Client[] = [];
         querySnapshot.forEach((doc) => {
@@ -154,4 +155,3 @@ function AdminReceiptContent() {
     </div>
   );
 }
-
