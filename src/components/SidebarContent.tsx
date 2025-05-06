@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -72,13 +73,13 @@ export default function SidebarContentComponent() {
           <SidebarMenuItem>
             <SidebarMenuButton onClick={() => handleNavigation('/receipt')}>
               <FileText />
-              <span>Receipt</span>
+              <span>Client Receipt</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={() => handleNavigation('/bill')}>
               <BarChart />
-              <span>Bill</span>
+              <span>Client Bill</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
