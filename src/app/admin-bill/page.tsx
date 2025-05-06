@@ -102,7 +102,7 @@ function AdminBillContent() {
   useEffect(() => {
     fetchReceipts();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // Fetch receipts on initial load
+  }, []); // Changed dependency to [] to fetch on mount
 
   // --- Filter Logic ---
   useEffect(() => {

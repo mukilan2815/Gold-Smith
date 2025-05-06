@@ -95,7 +95,7 @@ function BillContent() {
   useEffect(() => {
     fetchReceipts();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // Fetch on initial load
+  }, []); // Changed dependency to [] to fetch on mount
 
   // --- Filter Logic ---
   useEffect(() => {
@@ -154,7 +154,7 @@ function BillContent() {
       const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); // Reference by ID
       await deleteDoc(receiptRef);
       // Fetch receipts again after deletion
-       await fetchReceipts();
+       await fetchReceipts(); // Refetch data to update UI
       toast({ title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.` });
     } catch (error) {
       console.error("Error deleting receipt:", error);

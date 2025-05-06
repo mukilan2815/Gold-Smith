@@ -66,7 +66,7 @@ function AdminReceiptContent() {
   useEffect(() => {
     fetchClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // Fetch on initial load
+  }, []); // Changed dependency to [] to fetch on mount
 
   // --- Filter Logic ---
   useEffect(() => {

@@ -66,7 +66,7 @@ function ReceiptContent() {
         fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
       });
       setClients(fetchedClients);
-      // setFilteredClients(fetchedClients); // Initialize filtered list
+      // setFilteredClients(fetchedClients); // Initialize filtered list // Moved to filter useEffect
     } catch (error) {
       console.error("Error fetching clients from Firestore:", error);
       toast({ variant: "destructive", title: "Error", description: "Could not load clients." });
@@ -79,7 +79,7 @@ function ReceiptContent() {
   useEffect(() => {
     fetchClients();
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); // Fetch clients on initial load
+  }, []); // Changed dependency to [] to fetch on mount
 
 
   // Filter Logic - Now runs on clients state change or filter change
@@ -117,7 +117,7 @@ function ReceiptContent() {
        const clientRef = doc(db, 'ClientDetails', clientToDelete.id); // Use Firestore ID
        await deleteDoc(clientRef);
        // Refetch clients after deletion to update the list
-       await fetchClients();
+       await fetchClients(); // Refetch data to update UI
        toast({ title: 'Success', description: `Client ${clientToDelete.clientName} deleted.` });
      } catch (error) {
        console.error("Error deleting client:", error);
