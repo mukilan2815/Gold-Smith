@@ -2,10 +2,12 @@
 'use client';
 
 import type { ChangeEvent } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react'; // Added useRef
 import { useSearchParams } from 'next/navigation';
 import { doc, getDoc, Timestamp, DocumentData } from 'firebase/firestore'; // Import Timestamp, DocumentData
 import { format, isValid, parseISO } from 'date-fns'; // Import isValid, parseISO
+import jsPDF from 'jspdf'; // Import jsPDF
+import autoTable from 'jspdf-autotable'; // Import jspdf-autotable
 
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react'; // Added Download icon
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
@@ -89,10 +91,10 @@ function AdminBillViewContent() {
   const [receiptData, setReceiptData] = useState<AdminReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // State for manual calculation
-  const [manualGivenTotal, setManualGivenTotal] = useState('');
-  const [manualReceivedTotal, setManualReceivedTotal] = useState('');
-  const [manualOperation, setManualOperation] = useState<'add' | 'subtract'>('subtract');
+  // State for manual calculation (now "Total" section)
+  const [givenTotalInput, setGivenTotalInput] = useState(''); // Renamed for clarity
+  const [receivedTotalInput, setReceivedTotalInput] = useState(''); // Renamed for clarity
+  const [operation, setOperation] = useState<'add' | 'subtract'>('subtract'); // Renamed for clarity
 
 
   // --- Fetch Receipt Data ---
@@ -119,6 +121,9 @@ function AdminBillViewContent() {
              createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
              updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(),
            });
+           // Optionally pre-fill total inputs from receipt data if needed
+           setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
+           setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
         } else {
           toast({ variant: "destructive", title: "Not Found", description: "Receipt not found." });
           router.push('/admin-bill');
@@ -140,12 +145,12 @@ function AdminBillViewContent() {
   const receivedTotals = receiptData?.received;
 
 
-   // --- Manual Calculation ---
-   const calculateManualResult = () => {
-     const given = parseFloat(manualGivenTotal) || 0;
-     const received = parseFloat(manualReceivedTotal) || 0;
+   // --- Total Calculation ---
+   const calculateResult = () => { // Renamed for clarity
+     const given = parseFloat(givenTotalInput) || 0;
+     const received = parseFloat(receivedTotalInput) || 0;
      let result = 0;
-     if (manualOperation === 'add') {
+     if (operation === 'add') {
        result = given + received;
      } else { // Subtract
        result = given - received;
@@ -153,6 +158,201 @@ function AdminBillViewContent() {
      return result.toFixed(3);
    };
 
+
+   // --- Download Receipt ---
+    const downloadReceipt = () => {
+        if (!receiptData) {
+            toast({ variant: "destructive", title: "Error", description: "Cannot download receipt, data not loaded." });
+            return;
+        }
+        const hasGiven = receiptData.given && receiptData.given.items.length > 0;
+        const hasReceived = receiptData.received && receiptData.received.items.length > 0;
+        const givenDate = receiptData.given?.date ? parseISO(receiptData.given.date) : null;
+        const receivedDate = receiptData.received?.date ? parseISO(receiptData.received.date) : null;
+
+        if (!hasGiven && !hasReceived) {
+             toast({ variant: "destructive", title: "Error", description: "Cannot download an empty receipt." });
+             return;
+        }
+
+        const doc = new jsPDF();
+
+        // --- Styling ---
+        const primaryColor = '#000000'; // Black for text
+        const borderColor = '#B8860B'; // Dark Gold
+        const headerColor = '#FFF8DC'; // Cornsilk (Light Yellow)
+        const rowColor = '#FFFFFF'; // White
+        const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige)
+        const titleFontSize = 18; // Adjusted font size
+        const textFontSize = 10;
+        const tableHeaderFontSize = 9;
+        const tableBodyFontSize = 8;
+        const margin = 10;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        let startY = margin + 20; // Initial Y position
+
+        // --- Border ---
+        doc.setDrawColor(borderColor);
+        doc.setLineWidth(0.5); // Slightly thinner border
+        doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin);
+
+        // --- Title ---
+        doc.setFontSize(titleFontSize);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(primaryColor);
+        const title = 'Admin Receipt';
+        const titleWidth = doc.getTextWidth(title);
+        doc.text(title, (pageWidth - titleWidth) / 2, startY);
+        startY += 10;
+
+        // --- Client Details ---
+        doc.setFontSize(textFontSize);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(primaryColor);
+        doc.text(`Client Name: ${receiptData.clientName || 'N/A'}`, margin + 5, startY);
+        startY += 6;
+
+        // --- Given Section ---
+        if (hasGiven && receiptData.given) {
+            const formattedGivenDate = givenDate && isValid(givenDate) ? format(givenDate, 'PPP') : 'N/A';
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Given Details (Date: ${formattedGivenDate})`, margin + 5, startY);
+            startY += 8;
+
+            const givenTableColumns = ['S.No', 'Product Name', 'Pure Weight', 'Pure %', 'Melting', 'Total'];
+            const givenTableRows = receiptData.given.items.map((item, index) => [
+                index + 1,
+                item.productName || '',
+                getDisplayValue(item.pureWeight, 3),
+                getDisplayValue(item.purePercent, 2),
+                getDisplayValue(item.melting, 2),
+                getDisplayValue(item.total, 3)
+            ]);
+            const givenTotalRow = [
+                { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+                { content: getDisplayValue(receiptData.given.totalPureWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
+                '', '', // Empty cells for Pure%, Melting
+                { content: getDisplayValue(receiptData.given.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
+            ];
+
+            autoTable(doc, {
+                head: [givenTableColumns],
+                body: givenTableRows,
+                foot: [givenTotalRow],
+                startY: startY,
+                theme: 'grid',
+                headStyles: { fillColor: headerColor, textColor: primaryColor, fontStyle: 'bold', fontSize: tableHeaderFontSize, lineWidth: 0.1, lineColor: borderColor, halign: 'center' },
+                bodyStyles: { fillColor: rowColor, textColor: primaryColor, fontSize: tableBodyFontSize, lineWidth: 0.1, lineColor: borderColor, cellPadding: 1.5 },
+                alternateRowStyles: { fillColor: alternateRowColor },
+                footStyles: { fillColor: headerColor, textColor: primaryColor, fontStyle: 'bold', fontSize: tableHeaderFontSize, lineWidth: 0.1, lineColor: borderColor, halign: 'right' },
+                tableLineColor: borderColor,
+                tableLineWidth: 0.1,
+                margin: { left: margin + 5, right: margin + 5 },
+                didParseCell: (data) => {
+                     const numericColumns = [2, 3, 4, 5]; // Indices for numeric alignment
+                     if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
+                         data.cell.styles.halign = 'right';
+                     }
+                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { // Ensure "Total" aligns right
+                         data.cell.styles.halign = 'right';
+                     }
+                 },
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY after table
+            });
+            startY += 5; // Add spacing after the table
+        }
+
+        // --- Received Section ---
+        if (hasReceived && receiptData.received) {
+             const formattedReceivedDate = receivedDate && isValid(receivedDate) ? format(receivedDate, 'PPP') : 'N/A';
+             doc.setFontSize(12);
+             doc.setFont('helvetica', 'bold');
+             doc.text(`Received Details (Date: ${formattedReceivedDate})`, margin + 5, startY);
+             startY += 8;
+
+            const receivedTableColumns = ['S.No', 'Product Name', 'Final Ornaments (wt)', 'Stone Weight', 'Sub Total', 'Making Charge (%)', 'Total'];
+            const receivedTableRows = receiptData.received.items.map((item, index) => [
+                index + 1,
+                item.productName || '',
+                getDisplayValue(item.finalOrnamentsWt, 3),
+                getDisplayValue(item.stoneWeight, 3),
+                getDisplayValue(item.subTotal, 3),
+                getDisplayValue(item.makingChargePercent, 2),
+                getDisplayValue(item.total, 3)
+            ]);
+             const receivedTotalRow = [
+                 { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } },
+                 { content: getDisplayValue(receiptData.received.totalOrnamentsWt, 3), styles: { fontStyle: 'bold', halign: 'right' } },
+                 { content: getDisplayValue(receiptData.received.totalStoneWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
+                 { content: getDisplayValue(receiptData.received.totalSubTotal, 3), styles: { fontStyle: 'bold', halign: 'right' } },
+                 '', // Empty cell for Making Charge %
+                 { content: getDisplayValue(receiptData.received.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
+             ];
+
+             autoTable(doc, {
+                 head: [receivedTableColumns],
+                 body: receivedTableRows,
+                 foot: [receivedTotalRow],
+                 startY: startY,
+                 theme: 'grid',
+                 headStyles: { fillColor: headerColor, textColor: primaryColor, fontStyle: 'bold', fontSize: tableHeaderFontSize, lineWidth: 0.1, lineColor: borderColor, halign: 'center' },
+                 bodyStyles: { fillColor: rowColor, textColor: primaryColor, fontSize: tableBodyFontSize, lineWidth: 0.1, lineColor: borderColor, cellPadding: 1.5 },
+                 alternateRowStyles: { fillColor: alternateRowColor },
+                 footStyles: { fillColor: headerColor, textColor: primaryColor, fontStyle: 'bold', fontSize: tableHeaderFontSize, lineWidth: 0.1, lineColor: borderColor, halign: 'right' },
+                 tableLineColor: borderColor,
+                 tableLineWidth: 0.1,
+                 margin: { left: margin + 5, right: margin + 5 },
+                  didParseCell: (data) => {
+                     const numericColumns = [2, 3, 4, 5, 6]; // Indices for numeric alignment
+                     if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
+                         data.cell.styles.halign = 'right';
+                     }
+                      if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { // Ensure "Total" aligns right
+                         data.cell.styles.halign = 'right';
+                     }
+                 },
+                 didDrawPage: (data) => { startY = data.cursor?.y ?? startY; } // Update startY
+            });
+            startY += 5; // Add spacing after the table
+        }
+
+        // --- Total Section ---
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Total Summary', margin + 5, startY);
+        startY += 8;
+
+        doc.setFontSize(textFontSize);
+        doc.setFont('helvetica', 'normal');
+        const finalGivenTotal = parseFloat(givenTotalInput) || 0;
+        const finalReceivedTotal = parseFloat(receivedTotalInput) || 0;
+        const finalResult = calculateResult(); // Use the calculated result from UI state
+        const operationText = operation === 'add' ? '+' : '-';
+
+        autoTable(doc, {
+           startY: startY,
+           theme: 'plain', // Simple theme for summary
+           body: [
+             ['Given Total:', getDisplayValue(finalGivenTotal, 3)],
+             [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)], // Show operation
+             ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }], // Bold result
+           ],
+           columnStyles: {
+             0: { halign: 'right', cellWidth: 40 }, // Label column
+             1: { halign: 'right', cellWidth: 40 }, // Value column
+           },
+           margin: { left: pageWidth - margin - 5 - 80 }, // Align table to the right
+           tableWidth: 80, // Fixed width for the summary table
+           styles: { fontSize: textFontSize },
+           didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
+        });
+
+        // --- Save ---
+        doc.save(`admin_receipt_${receiptData.clientName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`);
+        toast({ title: 'Success', description: 'Admin receipt downloaded.' });
+    };
 
   // --- Render Logic ---
   if (loading) {
@@ -197,9 +397,14 @@ function AdminBillViewContent() {
                 <CardTitle className="text-2xl">Admin Receipt View</CardTitle>
                 <CardDescription>Client: {receiptData.clientName} (ID: {receiptData.clientId})</CardDescription>
              </div>
-              <Button onClick={() => router.back()} variant="outline" size="sm">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
-              </Button>
+              <div className="flex gap-2"> {/* Button group */}
+                 <Button onClick={downloadReceipt} variant="outline" size="sm">
+                    <Download className="mr-2 h-4 w-4" /> Download Receipt
+                 </Button>
+                 <Button onClick={() => router.back()} variant="outline" size="sm">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+                 </Button>
+              </div>
          </CardHeader>
         </Card>
 
@@ -323,31 +528,31 @@ function AdminBillViewContent() {
            </Card>
        )}
 
-        {/* Manual Comparison Section */}
+        {/* Total Section (Previously Manual Comparison) */}
         <Card>
           <CardHeader>
-            <CardTitle>Manual Comparison</CardTitle>
-            <CardDescription>Manually input totals for comparison (not saved).</CardDescription>
+            <CardTitle>Total</CardTitle> {/* Changed title */}
+            <CardDescription>Final calculation based on Given and Received totals.</CardDescription> {/* Changed description */}
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
-              <label htmlFor="manualGiven" className="block text-sm font-medium text-muted-foreground mb-1">Given Total</label>
+              <label htmlFor="givenTotal" className="block text-sm font-medium text-muted-foreground mb-1">Given Total</label> {/* Changed label */}
               <Input
-                id="manualGiven"
+                id="givenTotal" // Changed id
                 type="number"
-                value={manualGivenTotal}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setManualGivenTotal(e.target.value)}
+                value={givenTotalInput}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setGivenTotalInput(e.target.value)}
                 placeholder="Enter Given Total"
                 step="0.001"
                 className="text-right"
               />
             </div>
             <div>
-              <label htmlFor="manualOperation" className="block text-sm font-medium text-muted-foreground mb-1">Operation</label>
+              <label htmlFor="operation" className="block text-sm font-medium text-muted-foreground mb-1">Operation</label> {/* Changed label */}
               <select
-                id="manualOperation"
-                value={manualOperation}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => setManualOperation(e.target.value as 'add' | 'subtract')}
+                id="operation" // Changed id
+                value={operation}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setOperation(e.target.value as 'add' | 'subtract')}
                 className={cn(
                    "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 )} >
@@ -356,12 +561,12 @@ function AdminBillViewContent() {
               </select>
             </div>
             <div>
-              <label htmlFor="manualReceived" className="block text-sm font-medium text-muted-foreground mb-1">Received Total</label>
+              <label htmlFor="receivedTotal" className="block text-sm font-medium text-muted-foreground mb-1">Received Total</label> {/* Changed label */}
               <Input
-                id="manualReceived"
+                id="receivedTotal" // Changed id
                 type="number"
-                value={manualReceivedTotal}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setManualReceivedTotal(e.target.value)}
+                value={receivedTotalInput}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setReceivedTotalInput(e.target.value)}
                 placeholder="Enter Received Total"
                 step="0.001"
                 className="text-right"
@@ -371,7 +576,7 @@ function AdminBillViewContent() {
               <label className="block text-sm font-medium text-muted-foreground mb-1">Result</label>
               <Input
                 type="text"
-                value={calculateManualResult()}
+                value={calculateResult()} // Use renamed function
                 readOnly
                 className="font-semibold text-right bg-muted"
               />
@@ -383,3 +588,4 @@ function AdminBillViewContent() {
     </Layout>
   );
 }
+
