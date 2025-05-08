@@ -1,15 +1,20 @@
-
 'use client';
 
 import Layout from '@/components/Layout';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore'; // Import writeBatch for potential future batch operations
-import { db } from '@/lib/firebase'; // Import Firestore instance
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Textarea} from '@/components/ui/textarea';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {useToast} from '@/hooks/use-toast';
+import {collection, addDoc, serverTimestamp, doc, setDoc} from 'firebase/firestore'; // Optimized imports
+import {db} from '@/lib/firebase'; // Import Firestore instance
 
 export default function NewClientPage() {
   return (
@@ -19,16 +24,15 @@ export default function NewClientPage() {
   );
 }
 
-
 function NewClientContent() {
   const [shopName, setShopName] = useState('');
   const [clientName, setClientName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const { toast } = useToast();
+  const {toast} = useToast();
 
-  const handleSaveClient = () => { // Removed async as addDoc returns a promise handled by .then/.catch
+  const handleSaveClient = async () => {
     // Basic client-side validation
     if (
       !shopName.trim() ||
@@ -46,47 +50,49 @@ function NewClientContent() {
 
     setIsSaving(true);
     // Give immediate feedback
-    toast({
-        title: 'Saving Client...',
-        description: 'Please wait.',
+    const toastId = toast({
+      title: 'Saving Client...',
+      description: 'Please wait.',
     });
 
+    try {
+      const newClient = {
+        shopName: shopName.trim(),
+        clientName: clientName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        address: address.trim(),
+        createdAt: serverTimestamp(), // Use server timestamp for consistency
+      };
 
-    const newClient = {
-      shopName: shopName.trim(),
-      clientName: clientName.trim(),
-      phoneNumber: phoneNumber.trim(),
-      address: address.trim(),
-      createdAt: serverTimestamp(), // Use server timestamp for consistency
-    };
+      // Optimistic UI update: Generate a client ID and reset form immediately
+      const newClientId = doc(collection(db, 'ClientDetails')).id; // Generate a unique ID client-side
 
-    // Add document to Firestore 'ClientDetails' collection
-    // Using addDoc for auto-generated ID
-    addDoc(collection(db, 'ClientDetails'), newClient)
-      .then((docRef) => {
-          toast({
-            title: 'Client Saved!',
-            description: `${clientName}'s details saved successfully. ID: ${docRef.id}`, // Include ID for reference
-          });
+      setShopName('');
+      setClientName('');
+      setPhoneNumber('');
+      setAddress('');
 
-          // Reset form fields after successful save
-          setShopName('');
-          setClientName('');
-          setPhoneNumber('');
-          setAddress('');
-      })
-      .catch((error: any) => {
-           console.error("Error adding client to Firestore: ", error);
-           toast({
-             variant: 'destructive',
-             title: 'Save Error',
-             description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
-           });
-       })
-       .finally(() => {
-           // Ensure saving state is reset regardless of success or failure
-           setIsSaving(false);
-       });
+      // Perform the save operation in the background
+      try {
+        await setDoc(doc(db, 'ClientDetails', newClientId), newClient);
+        toast({
+          id: toastId,
+          title: 'Client Saved!',
+          description: `${clientName}'s details saved successfully. ID: ${newClientId}`,
+        });
+      } catch (error: any) {
+        console.error('Error adding client to Firestore: ', error);
+        toast({
+          id: toastId,
+          variant: 'destructive',
+          title: 'Save Error',
+          description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
+        });
+      }
+    } finally {
+      // Ensure saving state is reset regardless of success or failure
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -102,7 +108,7 @@ function NewClientContent() {
             <Input
               id="shopName"
               value={shopName}
-              onChange={(e) => setShopName(e.target.value)}
+              onChange={e => setShopName(e.target.value)}
               maxLength={50}
               disabled={isSaving}
               placeholder="Enter shop name"
@@ -113,7 +119,7 @@ function NewClientContent() {
             <Input
               id="clientName"
               value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
+              onChange={e => setClientName(e.target.value)}
               maxLength={50}
               disabled={isSaving}
               placeholder="Enter client name"
@@ -125,7 +131,7 @@ function NewClientContent() {
               id="phoneNumber"
               type="tel" // Use tel for semantic correctness
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={e => setPhoneNumber(e.target.value)}
               disabled={isSaving}
               placeholder="Enter phone number"
             />
@@ -135,7 +141,7 @@ function NewClientContent() {
             <Textarea
               id="address"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={e => setAddress(e.target.value)}
               disabled={isSaving}
               placeholder="Enter full address"
               rows={3}

@@ -1,19 +1,34 @@
-
 'use client';
 
-import { useState, useEffect, ChangeEvent } from 'react'; // Added ChangeEvent
-import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, deleteDoc, doc, Timestamp, limit } from 'firebase/firestore'; // Added Timestamp, deleteDoc, doc, limit
-import { format, parseISO, isValid, startOfDay, endOfDay } from 'date-fns'; // Added isValid, startOfDay, endOfDay
-import { Calendar as CalendarIcon, Trash2, Eye } from 'lucide-react'; // Added Trash2, Eye
+import {useState, useEffect, ChangeEvent, useCallback} from 'react'; // Added ChangeEvent
+import {useRouter} from 'next/navigation';
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  where,
+  deleteDoc,
+  doc,
+  Timestamp,
+  limit,
+} from 'firebase/firestore'; // Added Timestamp, deleteDoc, doc, limit
+import {format, parseISO, isValid, startOfDay, endOfDay} from 'date-fns'; // Added isValid, startOfDay, endOfDay
+import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react'; // Added Trash2, Eye
 
 import Layout from '@/components/Layout';
-import { Button, buttonVariants } from '@/components/ui/button'; // Added buttonVariants
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'; // Added CardDescription
-import { ScrollArea } from '@/components/ui/scroll-area'; // Added ScrollArea
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import {Button, buttonVariants} from '@/components/ui/button'; // Added buttonVariants
+import {Input} from '@/components/ui/input';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'; // Added CardDescription
+import {ScrollArea} from '@/components/ui/scroll-area'; // Added ScrollArea
+import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
+import {Calendar} from '@/components/ui/calendar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,13 +38,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
-import { db } from '@/lib/firebase';
-import { useToast } from '@/hooks/use-toast';
-import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
-
+import {cn} from '@/lib/utils';
+import {db} from '@/lib/firebase';
+import {useToast} from '@/hooks/use-toast';
+import {useDebounce} from '@/hooks/use-debounce'; // Import useDebounce
 
 // Interface matching the ClientReceipts structure in Firestore
 interface ClientReceipt {
@@ -51,7 +64,6 @@ interface ClientReceipt {
   createdAt?: Timestamp; // Firestore Timestamp
 }
 
-
 export default function BillPage() {
   return (
     <Layout>
@@ -69,7 +81,7 @@ function BillContent() {
   const [filteredReceipts, setFilteredReceipts] = useState<ClientReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const { toast } = useToast();
+  const {toast} = useToast();
 
   // Debounce filter inputs
   const debouncedShopName = useDebounce(shopNameFilter, 300); // 300ms delay
@@ -77,9 +89,8 @@ function BillContent() {
   const debouncedPhoneNumber = useDebounce(phoneNumberFilter, 300);
   const debouncedDateFilter = useDebounce(dateFilter, 300); // Debounce date changes too
 
-
   // --- Fetch Receipts from Firestore ---
-  const fetchReceipts = async () => {
+  const fetchReceipts = useCallback(async () => {
     setLoading(true);
     try {
       const receiptsRef = collection(db, 'ClientReceipts'); // Fetch from ClientReceipts
@@ -87,7 +98,7 @@ function BillContent() {
       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
       const querySnapshot = await getDocs(q);
       const fetchedReceipts: ClientReceipt[] = [];
-      querySnapshot.forEach((doc) => {
+      querySnapshot.forEach(doc => {
         const data = doc.data();
         // Ensure issueDate is handled correctly, even if stored differently (e.g., Timestamp)
         let issueDateStr = '';
@@ -95,58 +106,62 @@ function BillContent() {
           if (data.issueDate instanceof Timestamp) {
             issueDateStr = data.issueDate.toDate().toISOString();
           } else if (typeof data.issueDate === 'string') {
-             // Attempt to parse string dates, assuming ISO format primarily
-             try {
-                 issueDateStr = parseISO(data.issueDate).toISOString();
-             } catch (e) {
-                 console.warn(`Could not parse date string: ${data.issueDate}`);
-                 issueDateStr = ''; // Or handle as invalid
-             }
+            // Attempt to parse string dates, assuming ISO format primarily
+            try {
+              issueDateStr = parseISO(data.issueDate).toISOString();
+            } catch (e) {
+              console.warn(`Could not parse date string: ${data.issueDate}`);
+              issueDateStr = ''; // Or handle as invalid
+            }
           }
         }
         fetchedReceipts.push({
-            id: doc.id,
-            ...data,
-            issueDate: issueDateStr, // Ensure issueDate is stored as ISO string in state
-         } as ClientReceipt);
+          id: doc.id,
+          ...data,
+          issueDate: issueDateStr, // Ensure issueDate is stored as ISO string in state
+        } as ClientReceipt);
       });
       setReceipts(fetchedReceipts);
-      // setFilteredReceipts(fetchedReceipts); // Filter logic is now in useEffect
     } catch (error) {
-      console.error("Error fetching client receipts:", error);
-      toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
+      console.error('Error fetching client receipts:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not load receipts.',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchReceipts();
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Fetch only on mount
+  }, [fetchReceipts]); // Fetch only on mount
 
   // --- Filter Logic (now using debounced values) ---
   useEffect(() => {
+    if (!receipts) return;
+
     // Start with the full list of receipts
     let currentReceipts = [...receipts];
 
     // Filter by Shop Name
     if (debouncedShopName.trim() !== '') {
-      currentReceipts = currentReceipts.filter((receipt) =>
+      currentReceipts = currentReceipts.filter(receipt =>
         receipt.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
       );
     }
 
     // Filter by Client Name
     if (debouncedClientName.trim() !== '') {
-      currentReceipts = currentReceipts.filter((receipt) =>
+      currentReceipts = currentReceipts.filter(receipt =>
         receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
 
     // Filter by Phone Number
     if (debouncedPhoneNumber.trim() !== '') {
-      currentReceipts = currentReceipts.filter((receipt) =>
+      currentReceipts = currentReceipts.filter(receipt =>
         receipt.phoneNumber?.includes(debouncedPhoneNumber)
       );
     }
@@ -168,37 +183,45 @@ function BillContent() {
     }
 
     setFilteredReceipts(currentReceipts);
-  }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, debouncedDateFilter, receipts]); // Rerun when debounced filters or base receipts change
+  }, [
+    debouncedShopName,
+    debouncedClientName,
+    debouncedPhoneNumber,
+    debouncedDateFilter,
+    receipts,
+  ]); // Rerun when debounced filters or base receipts change
 
   // --- Navigation Handlers ---
   const handleViewReceipt = (receipt: ClientReceipt) => {
-     // Navigate to the details page, passing the Firestore receipt ID
-     router.push(`/receipt/details?clientId=${receipt.clientId}&clientName=${encodeURIComponent(receipt.clientName)}&receiptId=${receipt.id}`);
+    // Navigate to the details page, passing the Firestore receipt ID
+    router.push(
+      `/receipt/details?clientId=${receipt.clientId}&clientName=${encodeURIComponent(
+        receipt.clientName
+      )}&receiptId=${receipt.id}`
+    );
   };
 
-
- const handleDeleteReceipt = async (receiptToDelete: ClientReceipt) => {
+  const handleDeleteReceipt = async (receiptToDelete: ClientReceipt) => {
     try {
       const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); // Reference by ID
       await deleteDoc(receiptRef);
       // Remove the deleted receipt from the local state immediately
-      setReceipts((prevReceipts) => prevReceipts.filter(r => r.id !== receiptToDelete.id));
+      setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id));
       // Optionally refetch if there's a chance of external changes, but removing locally is faster for UI feedback
       // await fetchReceipts();
-      toast({ title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.` });
+      toast({title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.`});
     } catch (error) {
-      console.error("Error deleting receipt:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not delete receipt.' });
+      console.error('Error deleting receipt:', error);
+      toast({variant: 'destructive', title: 'Error', description: 'Could not delete receipt.'});
     }
   };
-
 
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-4 md:p-8">
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Client Bills</CardTitle>
-           <CardDescription>View and manage client receipts.</CardDescription>
+          <CardDescription>View and manage client receipts.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           {/* Filter Inputs */}
@@ -207,22 +230,28 @@ function BillContent() {
               type="text"
               placeholder="Filter by Shop Name"
               value={shopNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setShopNameFilter(e.target.value)} // Update immediate state
-               className="rounded-md"
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setShopNameFilter(e.target.value)
+              } // Update immediate state
+              className="rounded-md"
             />
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} // Update immediate state
-               className="rounded-md"
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setClientNameFilter(e.target.value)
+              } // Update immediate state
+              className="rounded-md"
             />
             <Input
               type="text" // Keep as text for flexibility
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPhoneNumberFilter(e.target.value)} // Update immediate state
-               className="rounded-md"
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setPhoneNumberFilter(e.target.value)
+              } // Update immediate state
+              className="rounded-md"
             />
             <Popover>
               <PopoverTrigger asChild>
@@ -254,84 +283,98 @@ function BillContent() {
               <p className="text-muted-foreground text-center">Loading receipts...</p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
-                {filteredReceipts.map((receipt) => {
-                   let formattedIssueDate = 'N/A';
-                   if (receipt.issueDate && typeof receipt.issueDate === 'string') {
-                     try {
-                         const parsedDate = parseISO(receipt.issueDate);
-                         if (isValid(parsedDate)) {
-                             formattedIssueDate = format(parsedDate, 'PPP');
-                         } else {
-                            console.warn(`Invalid date parsed for receipt ${receipt.id}: ${receipt.issueDate}`);
-                         }
-                     } catch (e) {
-                          console.warn(`Error parsing date string for receipt ${receipt.id}: ${receipt.issueDate}`, e);
-                     }
-                   }
+                {filteredReceipts.map(receipt => {
+                  let formattedIssueDate = 'N/A';
+                  if (receipt.issueDate && typeof receipt.issueDate === 'string') {
+                    try {
+                      const parsedDate = parseISO(receipt.issueDate);
+                      if (isValid(parsedDate)) {
+                        formattedIssueDate = format(parsedDate, 'PPP');
+                      } else {
+                        console.warn(
+                          `Invalid date parsed for receipt ${receipt.id}: ${receipt.issueDate}`
+                        );
+                      }
+                    } catch (e) {
+                      console.warn(
+                        `Error parsing date string for receipt ${receipt.id}: ${receipt.issueDate}`,
+                        e
+                      );
+                    }
+                  }
 
                   return (
-                  <li
-                    key={receipt.id} // Use Firestore document ID as key
-                    className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="mb-3 md:mb-0 md:flex-1">
-                      <p className="font-semibold text-lg">
-                        {receipt.clientName}
-                         {receipt.shopName && <span className="text-sm text-muted-foreground"> ({receipt.shopName})</span>}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Issue Date: {formattedIssueDate}
-                      </p>
-                       <p className="text-sm text-muted-foreground">
-                         Metal: {receipt.metalType}
-                       </p>
-                       <p className="text-xs text-muted-foreground">
-                         ID: {receipt.id}
-                       </p>
-                    </div>
-                     <div className="flex items-center gap-2 mt-2 md:mt-0"> {/* Button container */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewReceipt(receipt)}
-                        className="flex items-center gap-1"
-                       >
-                         <Eye className="h-4 w-4" /> View
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm" className="flex items-center gap-1">
-                              <Trash2 className="h-4 w-4" /> Delete
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Are you absolutely sure?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will delete
-                              the receipt permanently.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteReceipt(receipt)}
-                              className={cn(buttonVariants({ variant: "destructive" }))} // Style delete button
+                    <li
+                      key={receipt.id} // Use Firestore document ID as key
+                      className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="mb-3 md:mb-0 md:flex-1">
+                        <p className="font-semibold text-lg">
+                          {receipt.clientName}
+                          {receipt.shopName && (
+                            <span className="text-sm text-muted-foreground">
+                              {' '}
+                              ({receipt.shopName})
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Issue Date: {formattedIssueDate}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Metal: {receipt.metalType}
+                        </p>
+                        <p className="text-xs text-muted-foreground">ID: {receipt.id}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 md:mt-0">
+                        {' '}
+                        {/* Button container */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewReceipt(receipt)}
+                          className="flex items-center gap-1"
+                        >
+                          <Eye className="h-4 w-4" /> View
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="flex items-center gap-1"
                             >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </li>
-                );
-              })}
+                              <Trash2 className="h-4 w-4" /> Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will delete the receipt
+                                permanently.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteReceipt(receipt)}
+                                className={cn(buttonVariants({variant: 'destructive'}))} // Style delete button
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No receipts found matching your criteria.</p>
+              <p className="text-muted-foreground text-center">
+                No receipts found matching your criteria.
+              </p>
             )}
           </ScrollArea>
         </CardContent>
