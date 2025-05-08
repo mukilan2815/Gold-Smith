@@ -96,8 +96,8 @@ function ReceiptDetailsContent() {
   // State for form fields
   const [date, setDate] = useState<Date | undefined>(new Date()); // Default to today for new
   const [metal, setMetal] = useState('');
-  const [weight, setWeight] = useState(''); 
-  const [weightUnit, setWeightUnit] = useState(''); 
+  const [weight, setWeight] = useState('');
+  const [weightUnit, setWeightUnit] = useState('');
   const [items, setItems] = useState<ReceiptItem[]>([
     {sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''}, // Initialize calculated fields
   ]);
@@ -192,7 +192,7 @@ function ReceiptDetailsContent() {
     } else {
       // Creating a new receipt
       resetToNewReceiptState();
-      setIsEditMode(true); // Ensure edit mode for new
+      setIsEditMode(true);
       setIsLoading(false);
     }
   }, [clientIdParam, existingReceiptId, toast]);
@@ -319,7 +319,7 @@ function ReceiptDetailsContent() {
     // Filter out completely empty rows before validation
     const validItems = items.filter(item =>
       item.itemName.trim() !== '' ||
-      item.tag.trim() !== '' || // Assuming tag is relevant
+      item.tag.trim() !== '' ||
       item.grossWt.trim() !== '' ||
       item.stoneWt.trim() !== '' ||
       item.meltingTouch.trim() !== '' ||
@@ -507,18 +507,18 @@ function ReceiptDetailsContent() {
       head: [tableColumn],
       body: tableRows,
       startY: startY + 5,
-      theme: 'grid', 
+      theme: 'grid',
       headStyles: {
-        fillColor: headerColor, 
-        textColor: primaryColor, 
+        fillColor: headerColor,
+        textColor: primaryColor,
         fontStyle: 'bold',
         fontSize: tableHeaderFontSize,
         lineWidth: 0.1,
-        lineColor: borderColor, 
+        lineColor: borderColor,
         halign: 'center',
       },
       bodyStyles: {
-        fillColor: rowColor, 
+        fillColor: rowColor,
         textColor: primaryColor,
         fontSize: tableBodyFontSize,
         lineWidth: 0.1,
@@ -526,18 +526,18 @@ function ReceiptDetailsContent() {
         cellPadding: 1.5,
       },
       alternateRowStyles: {
-        fillColor: alternateRowColor, 
+        fillColor: alternateRowColor,
       },
       footStyles: {
-        fillColor: headerColor, 
+        fillColor: headerColor,
         textColor: primaryColor,
         fontStyle: 'bold',
         fontSize: tableHeaderFontSize, // Consistent font size for footer
         lineWidth: 0.1,
         lineColor: borderColor,
-        halign: 'right', 
+        halign: 'right',
       },
-      tableLineColor: borderColor, 
+      tableLineColor: borderColor,
       tableLineWidth: 0.1,
       margin: {left: margin + 2, right: margin + 2}, // Reduced margin slightly
       didParseCell: function (data) {
@@ -551,10 +551,10 @@ function ReceiptDetailsContent() {
              data.cell.styles.halign = 'right';
         }
       },
-      showFoot: 'lastPage', 
+      showFoot: 'lastPage',
       foot: [
         [
-          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}}, 
+          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalGrossWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalStoneWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalNetWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
@@ -692,25 +692,23 @@ function ReceiptDetailsContent() {
             {/* Dynamic Table */}
             <div className="overflow-x-auto">
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
-              <table className="w-full table-fixed border border-collapse border-border"> 
+              <table className="w-full table-fixed border border-collapse border-border">
                 <thead>
                   <tr className="bg-muted">
-                    <th className="p-2 border text-left text-sm w-[5%]">S.No</th> {/* Adjusted widths */}
-                    <th className="p-2 border text-left text-sm w-[25%]">Item Name</th>
-                    <th className="p-2 border text-left text-sm w-[10%]">Tag</th>
+                    <th className="p-2 border text-left text-sm w-[10%]">Item Name</th>
+                    <th className="p-2 border text-left text-sm w-[8%]">Tag</th>
                     <th className="p-2 border text-right text-sm w-[10%]">Gross (wt)</th>
                     <th className="p-2 border text-right text-sm w-[10%]">Stone (wt)</th>
                     <th className="p-2 border text-right text-sm w-[10%]">Net (wt)</th>
                     <th className="p-2 border text-right text-sm w-[12%]">Melting/Touch (%)</th>
                     <th className="p-2 border text-right text-sm w-[10%]">Final (wt)</th>
                     <th className="p-2 border text-right text-sm w-[10%]">Stone Amt</th>
-                    <th className="p-2 border text-center text-sm w-[8%]">Action</th> 
+                    <th className="p-2 border text-center text-sm w-[10%]">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, index) => (
                     <tr key={item.sNo ?? index}>
-                      <td className="p-1 border align-middle text-center">{item.sNo ?? index + 1}</td>
                       <td className="p-1 border align-middle">
                         <Input
                           type="text"
@@ -798,7 +796,7 @@ function ReceiptDetailsContent() {
                   ))}
                   {/* Total Row */}
                   <tr className="bg-muted font-semibold">
-                    <td className="p-2 border text-sm text-right" colSpan={3}>
+                    <td className="p-2 border text-sm text-right" colSpan={2}>
                       Total:
                     </td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('grossWt').toFixed(3)}</td>
