@@ -528,7 +528,6 @@ function ReceiptDetailsContent() {
     toast({title: 'Success', description: 'Receipt downloaded.'});
   };
 
-  // const isNewReceipt = !existingReceiptId; // Determine if it's a new receipt based on state
 
   if (isLoading) {
     return (
@@ -543,7 +542,7 @@ function ReceiptDetailsContent() {
   return (
     <Layout>
       <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-4 md:p-8">
-        <Card className="w-full max-w-7xl"> {/* Increased max-width */}
+        <Card className="w-full"> {/* Changed from max-w-7xl to w-full */}
           <CardHeader className="space-y-1">
             <div className="flex justify-between items-center">
               <div>
@@ -651,19 +650,19 @@ function ReceiptDetailsContent() {
             {/* Dynamic Table */}
             <div className="overflow-x-auto">
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
-              <table className="min-w-full w-full border border-collapse border-border">
+              <table className="w-full table-fixed border border-collapse border-border"> {/* Removed min-w-full, added table-fixed */}
                 <thead>
                   <tr className="bg-muted">
                     <th className="p-2 border text-left text-sm w-[4%]">S.No</th>
-                    <th className="p-2 border text-left text-sm min-w-[15rem]">Item Name</th>
-                    <th className="p-2 border text-left text-sm min-w-[8rem]">Tag</th>
-                    <th className="p-2 border text-right text-sm min-w-[8rem]">Gross (wt)</th>
-                    <th className="p-2 border text-right text-sm min-w-[8rem]">Stone (wt)</th>
-                    <th className="p-2 border text-right text-sm min-w-[8rem]">Net (wt)</th>
-                    <th className="p-2 border text-right text-sm min-w-[10rem]">Melting/Touch (%)</th>
-                    <th className="p-2 border text-right text-sm min-w-[8rem]">Final (wt)</th>
-                    <th className="p-2 border text-right text-sm min-w-[8rem]">Stone Amt</th>
-                    {isEditMode && <th className="p-2 border text-center text-sm w-[5%]">Action</th>}
+                    <th className="p-2 border text-left text-sm w-1/4">Item Name</th>
+                    <th className="p-2 border text-left text-sm w-[10%]">Tag</th>
+                    <th className="p-2 border text-right text-sm w-[9%]">Gross (wt)</th>
+                    <th className="p-2 border text-right text-sm w-[9%]">Stone (wt)</th>
+                    <th className="p-2 border text-right text-sm w-[9%]">Net (wt)</th>
+                    <th className="p-2 border text-right text-sm w-[12%]">Melting/Touch (%)</th>
+                    <th className="p-2 border text-right text-sm w-[9%]">Final (wt)</th>
+                    <th className="p-2 border text-right text-sm w-[10%]">Stone Amt</th> {/* Adjusted Stone Amt width */}
+                    <th className="p-2 border text-center text-sm w-[4%]">Action</th> {/* Action column always present */}
                   </tr>
                 </thead>
                 <tbody>
@@ -676,17 +675,17 @@ function ReceiptDetailsContent() {
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 w-full" 
+                          className="text-sm h-8 w-full"
                           placeholder="Item name"
                         />
                       </td>
                       <td className="p-1 border align-middle">
                         <Input
-                          type="text" 
+                          type="text"
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 w-full" 
+                          className="text-sm h-8 w-full"
                           placeholder="Tag"
                         />
                       </td>
@@ -696,7 +695,7 @@ function ReceiptDetailsContent() {
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full" 
+                          className="text-sm h-8 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -707,7 +706,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full" 
+                          className="text-sm h-8 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -721,7 +720,7 @@ function ReceiptDetailsContent() {
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full" 
+                          className="text-sm h-8 text-right w-full"
                           step="0.01"
                           placeholder="0.00"
                         />
@@ -735,24 +734,24 @@ function ReceiptDetailsContent() {
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full" 
-                          step="0.01" 
+                          className="text-sm h-8 text-right w-full"
+                          step="0.01"
                           placeholder="0.00"
                         />
                       </td>
-                      {isEditMode && ( 
-                        <td className="p-1 border text-center align-middle">
+                      <td className="p-1 border text-center align-middle">
+                        {isEditMode && (
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveItem(index)}
-                            disabled={items.length <= 1} 
+                            disabled={items.length <= 1}
                             className="text-destructive hover:text-destructive/80 h-8 w-8"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        </td>
-                      )}
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {/* Total Row */}
@@ -766,7 +765,7 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border"></td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td>
-                    {isEditMode && <td className="p-2 border"></td>}
+                    <td className="p-2 border"></td> {/* Cell for Action column total */}
                   </tr>
                 </tbody>
               </table>
@@ -782,3 +781,4 @@ function ReceiptDetailsContent() {
     </Layout>
   );
 }
+
