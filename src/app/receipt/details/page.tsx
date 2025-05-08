@@ -211,9 +211,9 @@ function ReceiptDetailsContent() {
 
   const handleAddItem = () => {
     if (!isEditMode) return; // Only allow adding in edit mode
-    setItems([
-      ...items,
-      {sNo: items.length + 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''},
+    setItems(prevItems => [
+      ...prevItems,
+      {sNo: prevItems.length + 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''},
     ]);
   };
 
@@ -356,7 +356,7 @@ function ReceiptDetailsContent() {
           updatedAt: serverTimestamp(),
         });
         setExistingReceiptId(newReceiptRef.id);
-        router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceiptRef.id}`, undefined); // Update URL
+        router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceiptRef.id}`, { scroll: false });
         toast({id: toastId.id, title: 'Receipt Created!', description: 'The receipt has been saved successfully.'});
       }
       // Update initial state to current saved state
@@ -528,7 +528,7 @@ function ReceiptDetailsContent() {
     toast({title: 'Success', description: 'Receipt downloaded.'});
   };
 
-  const isNewReceipt = !existingReceiptId; // Determine if it's a new receipt based on state
+  // const isNewReceipt = !existingReceiptId; // Determine if it's a new receipt based on state
 
   if (isLoading) {
     return (
@@ -543,9 +543,7 @@ function ReceiptDetailsContent() {
   return (
     <Layout>
       <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-4 md:p-8">
-        <Card className="w-full max-w-5xl">
-          {' '}
-          {/* Increased max-width */}
+        <Card className="w-full max-w-7xl"> {/* Increased max-width */}
           <CardHeader className="space-y-1">
             <div className="flex justify-between items-center">
               <div>
@@ -585,9 +583,7 @@ function ReceiptDetailsContent() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-6">
-            {' '}
-            {/* Increased gap */}
+          <CardContent className="grid gap-6"> {/* Increased gap */}
             {/* Top Section: Date, Metal, Weight */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <Popover>
@@ -595,7 +591,7 @@ function ReceiptDetailsContent() {
                   <Button
                     variant={'outline'}
                     className={cn(
-                      'w-full md:w-[240px] justify-start text-left font-normal', // Adjusted width
+                      'w-full md:w-[240px] justify-start text-left font-normal',
                       !date && 'text-muted-foreground'
                     )}
                     disabled={!isEditMode} // Disable in view mode
@@ -612,11 +608,7 @@ function ReceiptDetailsContent() {
               </Popover>
 
               <Select onValueChange={setMetal} value={metal} disabled={!isEditMode}>
-                {' '}
-                {/* Disable in view mode */}
                 <SelectTrigger className="w-full md:w-[200px]">
-                  {' '}
-                  {/* Adjusted width */}
                   <SelectValue placeholder="Select Metal Type" />
                 </SelectTrigger>
                 {isEditMode && ( // Only render SelectContent if in edit mode
@@ -641,8 +633,6 @@ function ReceiptDetailsContent() {
                   step="0.001"
                 />
                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}>
-                  {' '}
-                  {/* Enable/disable based on edit mode */}
                   <SelectTrigger className="w-[100px]">
                     <SelectValue placeholder="Unit" />
                   </SelectTrigger>
@@ -661,46 +651,42 @@ function ReceiptDetailsContent() {
             {/* Dynamic Table */}
             <div className="overflow-x-auto">
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
-              <table className="min-w-full border border-collapse border-border">
+              <table className="min-w-full w-full border border-collapse border-border">
                 <thead>
                   <tr className="bg-muted">
-                    <th className="p-2 border text-left text-sm">S.No</th>
-                    <th className="p-2 border text-left text-sm">Item Name</th>
-                    <th className="p-2 border text-left text-sm">Tag</th>
-                    <th className="p-2 border text-right text-sm">Gross (wt)</th>
-                    <th className="p-2 border text-right text-sm">Stone (wt)</th>
-                    <th className="p-2 border text-right text-sm">Net (wt)</th>
-                    <th className="p-2 border text-right text-sm">Melting/Touch (%)</th>
-                    <th className="p-2 border text-right text-sm">Final (wt)</th>
-                    <th className="p-2 border text-right text-sm">Stone Amt</th>
-                    {isEditMode && <th className="p-2 border text-center text-sm">Action</th>}
-                    {' '}
-                    {/* Show Action header only in edit mode */}
+                    <th className="p-2 border text-left text-sm w-[4%]">S.No</th>
+                    <th className="p-2 border text-left text-sm min-w-[15rem]">Item Name</th>
+                    <th className="p-2 border text-left text-sm min-w-[8rem]">Tag</th>
+                    <th className="p-2 border text-right text-sm min-w-[8rem]">Gross (wt)</th>
+                    <th className="p-2 border text-right text-sm min-w-[8rem]">Stone (wt)</th>
+                    <th className="p-2 border text-right text-sm min-w-[8rem]">Net (wt)</th>
+                    <th className="p-2 border text-right text-sm min-w-[10rem]">Melting/Touch (%)</th>
+                    <th className="p-2 border text-right text-sm min-w-[8rem]">Final (wt)</th>
+                    <th className="p-2 border text-right text-sm min-w-[8rem]">Stone Amt</th>
+                    {isEditMode && <th className="p-2 border text-center text-sm w-[5%]">Action</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, index) => (
                     <tr key={item.sNo ?? index}>
-                      {' '}
-                      {/* Use sNo if available, fallback to index */}
                       <td className="p-1 border align-middle text-center">{item.sNo ?? index + 1}</td>
                       <td className="p-1 border align-middle">
                         <Input
                           type="text"
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 w-48" 
+                          disabled={!isEditMode}
+                          className="text-sm h-8 w-full" 
                           placeholder="Item name"
                         />
                       </td>
                       <td className="p-1 border align-middle">
                         <Input
-                          type="text" // Assuming tag can be alphanumeric
+                          type="text" 
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 w-32" 
+                          disabled={!isEditMode}
+                          className="text-sm h-8 w-full" 
                           placeholder="Tag"
                         />
                       </td>
@@ -709,8 +695,8 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-32" 
+                          disabled={!isEditMode}
+                          className="text-sm h-8 text-right w-full" 
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -720,14 +706,13 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-32" 
+                          disabled={!isEditMode}
+                          className="text-sm h-8 text-right w-full" 
                           step="0.001"
                           placeholder="0.000"
                         />
                       </td>
                       <td className="p-1 border text-right align-middle text-sm bg-muted/30">
-                        {/* Display calculated Net Wt */}
                         {item.netWt}
                       </td>
                       <td className="p-1 border align-middle">
@@ -735,14 +720,13 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-32" 
+                          disabled={!isEditMode}
+                          className="text-sm h-8 text-right w-full" 
                           step="0.01"
                           placeholder="0.00"
                         />
                       </td>
                       <td className="p-1 border text-right align-middle text-sm bg-muted/30">
-                        {/* Display calculated Final Wt */}
                         {item.finalWt}
                       </td>
                       <td className="p-1 border align-middle">
@@ -750,20 +734,20 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
-                          disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-32" 
-                          step="0.01" // Assuming amount can have cents
+                          disabled={!isEditMode}
+                          className="text-sm h-8 text-right w-full" 
+                          step="0.01" 
                           placeholder="0.00"
                         />
                       </td>
-                      {isEditMode && ( // Show remove button only in edit mode
+                      {isEditMode && ( 
                         <td className="p-1 border text-center align-middle">
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveItem(index)}
-                            disabled={items.length <= 1} // Disable if only one item
-                            className="text-destructive hover:text-destructive/80 h-8 w-8" // Smaller icon button
+                            disabled={items.length <= 1} 
+                            className="text-destructive hover:text-destructive/80 h-8 w-8"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -780,29 +764,21 @@ function ReceiptDetailsContent() {
                     <td className="p-2 border text-right text-sm">{calculateTotal('stoneWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('netWt').toFixed(3)}</td>
                     <td className="p-2 border"></td>
-                    {' '}
-                    {/* Melting/Touch doesn't usually have a total */}
                     <td className="p-2 border text-right text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td>
-                    {' '}
-                    {/* Assuming 2 decimals for amount */}
                     {isEditMode && <td className="p-2 border"></td>}
-                    {' '}
-                    {/* Empty cell for action column total */}
                   </tr>
                 </tbody>
               </table>
-              {isEditMode && ( // Only show Add Item button in edit mode
+              {isEditMode && (
                 <Button onClick={handleAddItem} variant="outline" size="sm" className="mt-3">
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Item Row
                 </Button>
               )}
             </div>
-            {/* Action Buttons moved to CardHeader */}
           </CardContent>
         </Card>
       </div>
     </Layout>
   );
 }
-
