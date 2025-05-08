@@ -1,6 +1,7 @@
 
 'use client';
 
+import type {ChangeEvent} from 'react';
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {useSearchParams, useRouter} from 'next/navigation';
 import {
@@ -347,7 +348,7 @@ function ReceiptDetailsContent() {
           ...receiptData,
           updatedAt: serverTimestamp(),
         });
-        toast({id: toastId, title: 'Receipt Updated!', description: 'The receipt has been saved successfully.'});
+        toast({id: toastId.id, title: 'Receipt Updated!', description: 'The receipt has been saved successfully.'});
       } else {
         const newReceiptRef = await addDoc(collection(db, 'ClientReceipts'), {
           ...receiptData,
@@ -356,7 +357,7 @@ function ReceiptDetailsContent() {
         });
         setExistingReceiptId(newReceiptRef.id);
         router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceiptRef.id}`, undefined); // Update URL
-        toast({id: toastId, title: 'Receipt Created!', description: 'The receipt has been saved successfully.'});
+        toast({id: toastId.id, title: 'Receipt Created!', description: 'The receipt has been saved successfully.'});
       }
       // Update initial state to current saved state
       const savedInitialState = {date, metal, weight, weightUnit, items: items.map((it, idx) => ({...it, sNo: idx + 1}))}; // Re-add sNo for UI state
@@ -364,7 +365,7 @@ function ReceiptDetailsContent() {
       setIsEditMode(false); // Exit edit mode
     } catch (error) {
       console.error('Error saving receipt:', error);
-      toast({id: toastId, variant: 'destructive', title: 'Error', description: 'Failed to save receipt.'});
+      toast({id: toastId.id, variant: 'destructive', title: 'Error', description: 'Failed to save receipt.'});
     } finally {
       setIsSaving(false);
     }
@@ -689,7 +690,7 @@ function ReceiptDetailsContent() {
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 w-32" // Increased width here
+                          className="text-sm h-8 w-36" // Increased width for Item Name
                           placeholder="Item name"
                         />
                       </td>
@@ -699,7 +700,7 @@ function ReceiptDetailsContent() {
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 w-24" // Increased width here
+                          className="text-sm h-8 w-28" // Increased width for Tag
                           placeholder="Tag"
                         />
                       </td>
@@ -709,7 +710,7 @@ function ReceiptDetailsContent() {
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-24" // Increased width here
+                          className="text-sm h-8 text-right w-28" // Increased width for Gross Wt
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -720,7 +721,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-24" // Increased width here
+                          className="text-sm h-8 text-right w-28" // Increased width for Stone Wt
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -735,7 +736,7 @@ function ReceiptDetailsContent() {
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-24" // Increased width here
+                          className="text-sm h-8 text-right w-28" // Increased width for Melting/Touch
                           step="0.01"
                           placeholder="0.00"
                         />
@@ -750,7 +751,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right w-24" // Increased width here
+                          className="text-sm h-8 text-right w-28" // Increased width for Stone Amt
                           step="0.01" // Assuming amount can have cents
                           placeholder="0.00"
                         />
@@ -804,3 +805,4 @@ function ReceiptDetailsContent() {
     </Layout>
   );
 }
+
