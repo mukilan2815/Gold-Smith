@@ -1,3 +1,4 @@
+
 'use client';
 
 import {useState, useEffect, useRef, useCallback} from 'react';
@@ -688,7 +689,7 @@ function ReceiptDetailsContent() {
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8"
+                          className="text-sm h-8 w-32" // Increased width here
                           placeholder="Item name"
                         />
                       </td>
@@ -698,7 +699,7 @@ function ReceiptDetailsContent() {
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8"
+                          className="text-sm h-8 w-24" // Increased width here
                           placeholder="Tag"
                         />
                       </td>
@@ -708,7 +709,7 @@ function ReceiptDetailsContent() {
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right"
+                          className="text-sm h-8 text-right w-24" // Increased width here
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -719,7 +720,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right"
+                          className="text-sm h-8 text-right w-24" // Increased width here
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -734,7 +735,7 @@ function ReceiptDetailsContent() {
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right"
+                          className="text-sm h-8 text-right w-24" // Increased width here
                           step="0.01"
                           placeholder="0.00"
                         />
@@ -749,7 +750,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
                           disabled={!isEditMode} // Disable in view mode
-                          className="text-sm h-8 text-right"
+                          className="text-sm h-8 text-right w-24" // Increased width here
                           step="0.01" // Assuming amount can have cents
                           placeholder="0.00"
                         />
