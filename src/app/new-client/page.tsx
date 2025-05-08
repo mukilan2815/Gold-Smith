@@ -1,3 +1,4 @@
+
 'use client';
 
 import Layout from '@/components/Layout';
@@ -13,8 +14,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {useToast} from '@/hooks/use-toast';
-import {collection, addDoc, serverTimestamp, doc, setDoc} from 'firebase/firestore'; // Optimized imports
-import {db} from '@/lib/firebase'; // Import Firestore instance
+import {collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {db} from '@/lib/firebase';
 
 export default function NewClientPage() {
   return (
@@ -30,10 +31,9 @@ function NewClientContent() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const {toast} = useToast();
+  const {toast, dismiss} = useToast();
 
   const handleSaveClient = async () => {
-    // Basic client-side validation
     if (
       !shopName.trim() ||
       !clientName.trim() ||
@@ -49,48 +49,46 @@ function NewClientContent() {
     }
 
     setIsSaving(true);
-    // Give immediate feedback
-    const toastId = toast({
+    const savingToast = toast({
       title: 'Saving Client...',
-      description: 'Please wait.',
+      description: 'Please wait. This may take a moment depending on network and database speed.',
     });
 
     try {
+      const newClientRef = doc(collection(db, 'ClientDetails')); // Generate ID client-side for optimistic updates
       const newClient = {
+        id: newClientRef.id, // Store the generated ID
         shopName: shopName.trim(),
         clientName: clientName.trim(),
         phoneNumber: phoneNumber.trim(),
         address: address.trim(),
-        createdAt: serverTimestamp(), // Use server timestamp for consistency
+        createdAt: serverTimestamp(),
       };
 
-      // Optimistic UI update: Generate a client ID and reset form immediately
-      const newClientId = doc(collection(db, 'ClientDetails')).id; // Generate a unique ID client-side
-
+      // Optimistically clear form
       setShopName('');
       setClientName('');
       setPhoneNumber('');
       setAddress('');
+      
+      await setDoc(newClientRef, newClient);
 
-      // Perform the save operation in the background
-      try {
-        await setDoc(doc(db, 'ClientDetails', newClientId), newClient);
-        toast({
-          id: toastId,
-          title: 'Client Saved!',
-          description: `${clientName}'s details saved successfully. ID: ${newClientId}`,
-        });
-      } catch (error: any) {
-        console.error('Error adding client to Firestore: ', error);
-        toast({
-          id: toastId,
-          variant: 'destructive',
-          title: 'Save Error',
-          description: `Could not save client details. Error: ${error.message || 'Unknown error'}`,
-        });
-      }
+      dismiss(savingToast.id); // Dismiss "Saving..." toast
+      toast({
+        title: 'Client Saved!',
+        description: `${newClient.clientName}'s details saved successfully. ID: ${newClient.id}`,
+      });
+    } catch (error: any) {
+      console.error('Error adding client to Firestore: ', error);
+      dismiss(savingToast.id); // Dismiss "Saving..." toast
+      toast({
+        variant: 'destructive',
+        title: 'Save Error',
+        description: `Could not save client details. Error: ${error.message || 'Unknown error'}. If this persists, check network and Firestore status.`,
+      });
+      // Optionally, re-populate form with original values if save fails and form was cleared
+      // setShopName(newClient.shopName); // etc.
     } finally {
-      // Ensure saving state is reset regardless of success or failure
       setIsSaving(false);
     }
   };
@@ -129,7 +127,7 @@ function NewClientContent() {
             <label htmlFor="phoneNumber">Phone Number</label>
             <Input
               id="phoneNumber"
-              type="tel" // Use tel for semantic correctness
+              type="tel"
               value={phoneNumber}
               onChange={e => setPhoneNumber(e.target.value)}
               disabled={isSaving}
