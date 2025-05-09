@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChangeEvent} from 'react'; // Added ChangeEvent
+import type { ChangeEvent} from 'react'; 
 import {useState, useEffect, useCallback} from 'react'; 
 import {useRouter} from 'next/navigation';
 import {
@@ -8,13 +8,13 @@ import {
   getDocs,
   query,
   orderBy,
-  where,
+  // where, // Not used with current filtering logic, keep if needed later
   deleteDoc,
   doc,
   Timestamp,
-  limit,
+  limit, // Import limit
 } from 'firebase/firestore'; 
-import {format, parseISO, isValid, startOfDay, endOfDay} from 'date-fns'; 
+import {format, parseISO, isValid, /* startOfDay, endOfDay */ } from 'date-fns'; 
 import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react'; 
 
 import Layout from '@/components/Layout';
@@ -93,6 +93,7 @@ function BillContent() {
     setLoading(true);
     try {
       const receiptsRef = collection(db, 'ClientReceipts'); 
+      // Added limit(50) for performance
       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
       const querySnapshot = await getDocs(q);
       const fetchedReceipts: ClientReceipt[] = [];
@@ -104,17 +105,28 @@ function BillContent() {
             issueDateStr = data.issueDate.toDate().toISOString();
           } else if (typeof data.issueDate === 'string') {
             try {
-              issueDateStr = parseISO(data.issueDate).toISOString();
+              // Ensure date string is valid ISO before parsing, or handle it if it's already 'yyyy-MM-dd'
+              // For simplicity, assuming it's stored as full ISO or needs to be converted.
+              const parsedDate = parseISO(data.issueDate);
+              if (isValid(parsedDate)) {
+                issueDateStr = parsedDate.toISOString();
+              } else {
+                console.warn(`Could not parse date string: ${data.issueDate} for receipt ${doc.id}`);
+                issueDateStr = data.issueDate; // Use as is if not parsable to ISO
+              }
             } catch (e) {
-              console.warn(`Could not parse date string: ${data.issueDate}`);
-              issueDateStr = ''; 
+              console.warn(`Error parsing date string: ${data.issueDate} for receipt ${doc.id}`, e);
+              issueDateStr = data.issueDate; // Fallback to original string
             }
+          } else {
+             console.warn(`Unsupported date format for issueDate on receipt ${doc.id}:`, data.issueDate);
           }
         }
         fetchedReceipts.push({
           id: doc.id,
           ...data,
           issueDate: issueDateStr, 
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt : undefined, // Ensure createdAt is a Timestamp or undefined
         } as ClientReceipt);
       });
       setReceipts(fetchedReceipts);
@@ -123,7 +135,7 @@ function BillContent() {
       toast({
         variant: 'destructive',
         title: 'Error fetching receipts',
-        description: "Could not load receipts. This query sorts by 'createdAt'. Ensure all 'ClientReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console.",
+        description: "Could not load receipts. This query sorts by 'createdAt'. Ensure all 'ClientReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages.",
       });
     } finally {
       setLoading(false);
@@ -263,7 +275,7 @@ function BillContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientReceipts' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+                Loading receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientReceipts' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
@@ -275,9 +287,18 @@ function BillContent() {
                       if (isValid(parsedDate)) {
                         formattedIssueDate = format(parsedDate, 'PPP');
                       } else {
-                        console.warn(
-                          `Invalid date parsed for receipt ${receipt.id}: ${receipt.issueDate}`
-                        );
+                        // If parseISO fails, try to format directly if it might be 'yyyy-MM-dd'
+                        const parts = receipt.issueDate.split('-');
+                        if (parts.length === 3) {
+                            const directDate = new Date(Number(parts[0]), Number(parts[1]) -1, Number(parts[2]));
+                            if (isValid(directDate)) {
+                                formattedIssueDate = format(directDate, 'PPP');
+                            } else {
+                                console.warn(`Invalid date parsed for receipt ${receipt.id}: ${receipt.issueDate}`);
+                            }
+                        } else {
+                            console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
+                        }
                       }
                     } catch (e) {
                       console.warn(
@@ -357,7 +378,7 @@ function BillContent() {
               </ul>
             ) : (
               <p className="text-muted-foreground text-center">
-                No receipts found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.
+                No receipts found matching your criteria. If loading took a long time, please verify Firestore indexes for 'ClientReceipts' on the 'createdAt' field (descending).
               </p>
             )}
           </ScrollArea>

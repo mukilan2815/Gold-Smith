@@ -46,6 +46,7 @@ function AdminReceiptContent() {
      setLoading(true);
      try {
        const clientsRef = collection(db, 'ClientDetails');
+       // Added limit(50) for performance
        const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50));
        const querySnapshot = await getDocs(q);
        const fetchedClients: Client[] = [];
@@ -55,7 +56,11 @@ function AdminReceiptContent() {
        setClients(fetchedClients);
      } catch (error) {
        console.error("Error fetching clients from Firestore:", error);
-       toast({ variant: "destructive", title: "Error fetching clients", description: "Could not load clients. This query sorts by 'createdAt'. Ensure all 'ClientDetails' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console." });
+       toast({ 
+         variant: "destructive", 
+         title: "Error fetching clients", 
+         description: "Could not load clients for Admin Receipt. This query sorts by 'createdAt'. Ensure all 'ClientDetails' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages." 
+        });
      } finally {
        setLoading(false);
      }
@@ -126,7 +131,7 @@ function AdminReceiptContent() {
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientDetails' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+                Loading clients... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientDetails' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow or fails, these are the primary areas to investigate. Check browser console for specific errors.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
@@ -160,7 +165,7 @@ function AdminReceiptContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.</p>
+              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took a long time, please verify Firestore indexes for 'ClientDetails' on the 'createdAt' field (descending).</p>
             )}
           </ScrollArea>
         </CardContent>

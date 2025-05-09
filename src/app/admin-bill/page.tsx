@@ -3,8 +3,8 @@
 import type { ChangeEvent } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData, limit } from 'firebase/firestore'; 
-import { format, isValid, parseISO, startOfDay, endOfDay } from 'date-fns'; 
+import { collection, getDocs, query, orderBy, Timestamp, DocumentData, limit } from 'firebase/firestore'; 
+import { format, isValid, parseISO } from 'date-fns'; 
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -72,6 +72,7 @@ function AdminBillContent() {
      setLoading(true);
      try {
        const receiptsRef = collection(db, 'AdminReceipts');
+       // Added limit(50) for performance
        const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
        const querySnapshot = await getDocs(q);
        const fetchedReceipts: AdminReceipt[] = [];
@@ -94,7 +95,11 @@ function AdminBillContent() {
        setReceipts(fetchedReceipts);
      } catch (error) {
        console.error("Error fetching admin receipts:", error);
-       toast({ variant: "destructive", title: "Error fetching receipts", description: "Could not load admin receipts. This query sorts by 'createdAt'. Ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console." });
+       toast({ 
+         variant: "destructive", 
+         title: "Error fetching receipts", 
+         description: "Could not load admin receipts. This query sorts by 'createdAt'. Ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages." 
+        });
      } finally {
        setLoading(false);
      }
@@ -103,6 +108,7 @@ function AdminBillContent() {
 
   useEffect(() => {
     fetchReceipts();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
   useEffect(() => {
@@ -138,6 +144,15 @@ function AdminBillContent() {
                  } catch (e) { console.warn('Invalid received date format:', receipt.received.date); }
             }
             if (receivedDateStr === filterDateStr) return true;
+
+            // Also check createdAt and updatedAt if they are relevant for filtering by a single date
+            // This depends on what the user means by "Date" filter for an admin receipt
+            const createdAtDate = receipt.createdAt?.toDate();
+            if (createdAtDate && isValid(createdAtDate) && format(createdAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
+
+            const updatedAtDate = receipt.updatedAt?.toDate();
+            if (updatedAtDate && isValid(updatedAtDate) && format(updatedAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
+
 
             return false; 
         });
@@ -206,7 +221,7 @@ function AdminBillContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading admin receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'AdminReceipts' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+                Loading admin receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp type and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow or fails, these are the primary areas to investigate. Check browser console for specific errors.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
@@ -258,7 +273,7 @@ function AdminBillContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No admin receipts found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.</p>
+              <p className="text-muted-foreground text-center">No admin receipts found matching your criteria. If loading took a long time, please verify Firestore indexes for 'AdminReceipts' on the 'createdAt' field (descending).</p>
             )}
           </ScrollArea>
         </CardContent>
