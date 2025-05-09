@@ -578,7 +578,7 @@ function ReceiptDetailsContent() {
     <Layout>
       <div className="flex flex-col items-center justify-start min-h-screen bg-secondary py-4 md:py-8 px-1 md:px-2">
         <Card className="w-full max-w-none"> 
-          <CardHeader className="space-y-1 p-4">
+          <CardHeader className="space-y-1 p-3"> {/* Reduced padding */}
             <div className="flex flex-wrap justify-between items-center gap-2">
               <div>
                 <CardTitle className="text-2xl">Client Receipt</CardTitle>
@@ -614,8 +614,8 @@ function ReceiptDetailsContent() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4 p-4 pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          <CardContent className="grid gap-3 p-3 pt-0"> {/* Reduced padding and gap */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center"> {/* Reduced gap */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -677,7 +677,7 @@ function ReceiptDetailsContent() {
             <hr className="border-border my-2" />
             <div className="overflow-x-auto">
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
-              <table className="w-full table-fixed border border-collapse border-border">
+              <table className="w-full border border-collapse border-border">
                 <colgroup>
                     <col style={{ width: '4%' }} />   {/* S.No. */}
                     <col style={{ width: '20%' }} /> {/* Item Name */}
