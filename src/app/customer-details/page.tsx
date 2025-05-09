@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -19,18 +19,18 @@ interface Client {
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: any; 
+  createdAt?: Timestamp; 
 }
 
-export default function CustomerDetailsPage() {
+export default function CustomerDetailsListPage() {
   return (
     <Layout>
-      <CustomerDetailsContent />
+      <CustomerDetailsListContent />
     </Layout>
   );
 }
 
-function CustomerDetailsContent() {
+function CustomerDetailsListContent() {
   const [shopNameFilter, setShopNameFilter] = useState('');
   const [clientNameFilter, setClientNameFilter] = useState('');
   const [phoneNumberFilter, setPhoneNumberFilter] = useState('');
@@ -47,19 +47,20 @@ function CustomerDetailsContent() {
     setLoading(true);
     try {
       const clientsRef = collection(db, 'ClientDetails');
+      // Querying by 'createdAt' (desc) requires an index.
       const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50));
       const querySnapshot = await getDocs(q);
       const fetchedClients: Client[] = [];
       querySnapshot.forEach((doc) => {
-        fetchedClients.push({ id: doc.id, ...doc.data() } as Client);
+        fetchedClients.push({ id: doc.id, ...(doc.data() as Omit<Client, 'id'>) });
       });
       setClients(fetchedClients);
     } catch (error) {
-      console.error("Error fetching clients:", error);
+      console.error("Error fetching clients for Customer Details:", error);
       toast({ 
         variant: "destructive", 
-        title: "Error fetching clients", 
-        description: "Could not load clients. Ensure Firestore indexes are set up for 'ClientDetails' on 'createdAt' (descending). Check console." 
+        title: "Error Fetching Clients", 
+        description: "Could not load clients. This often means Firestore indexes are missing. Please ensure an index on 'ClientDetails' collection for 'createdAt' (descending) exists. Check console and firestore.indexes.md." 
       });
     } finally {
       setLoading(false);
@@ -93,7 +94,7 @@ function CustomerDetailsContent() {
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Customer Details - Select Client</CardTitle>
-          <CardDescription>Filter and select a client. Slow loading? Check Firestore indexes for 'ClientDetails'.</CardDescription>
+          <CardDescription>Filter and select a client to view their details and receipts. Slow loading? Check Firestore index for 'ClientDetails' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -104,7 +105,7 @@ function CustomerDetailsContent() {
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... For optimal performance, ensure a descending index exists on 'createdAt' in your 'ClientDetails' Firestore collection.
+                Loading clients... If slow, ensure a Firestore index on 'ClientDetails' for 'createdAt' (descending) is active. Refer to firestore.indexes.md.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
@@ -123,7 +124,7 @@ function CustomerDetailsContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found. Slow loading? Check Firestore indexes for 'ClientDetails' on 'createdAt' (descending).</p>
+              <p className="text-muted-foreground text-center">No clients found. If clients exist but are not displayed, or loading is slow, check Firestore indexes for 'ClientDetails' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
             )}
           </ScrollArea>
         </CardContent>

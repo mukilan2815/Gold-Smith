@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {useToast} from '@/hooks/use-toast';
-import {collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {collection, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import {db} from '@/lib/firebase';
 
 export default function NewClientPage() {
@@ -30,7 +30,7 @@ function NewClientContent() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const {toast} = useToast(); // Removed dismiss as it's part of toast object now
+  const {toast} = useToast(); 
 
   const handleSaveClient = async () => {
     if (!shopName.trim() || !clientName.trim() || !phoneNumber.trim() || !address.trim()) {
@@ -45,7 +45,7 @@ function NewClientContent() {
     setIsSaving(true);
     const savingToast = toast({
       title: 'Saving Client...',
-      description: 'Please wait. If this takes too long, ensure Firestore indexes are set up for ClientDetails (e.g., on createdAt).',
+      description: 'Please wait. If this process is slow, ensure a Firestore index is configured for the "ClientDetails" collection on the "createdAt" field (descending). See firestore.indexes.md.',
     });
 
     const originalShopName = shopName;
@@ -56,35 +56,32 @@ function NewClientContent() {
     try {
       const newClientRef = doc(collection(db, 'ClientDetails'));
       const newClientData = {
-        // id: newClientRef.id, // No longer storing ID within the document itself as Firestore provides it
         shopName: shopName.trim(),
         clientName: clientName.trim(),
         phoneNumber: phoneNumber.trim(),
         address: address.trim(),
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp() as Timestamp, // Firestore will set this on the server
       };
 
       await setDoc(newClientRef, newClientData);
 
-      // Clear form only after successful save
       setShopName('');
       setClientName('');
       setPhoneNumber('');
       setAddress('');
       
-      toast.update(savingToast.id, { // Use toast.update
+      toast.update(savingToast.id, { 
         title: 'Client Saved!',
         description: `${newClientData.clientName}'s details saved successfully. ID: ${newClientRef.id}`,
       });
 
     } catch (error: any) {
       console.error('Error adding client to Firestore: ', error);
-      toast.update(savingToast.id, { // Use toast.update
+      toast.update(savingToast.id, { 
         variant: 'destructive',
         title: 'Save Error',
-        description: `Could not save client details. Error: ${error.message || 'Unknown error'}. Check network, Firestore status, and console.`,
+        description: `Could not save client. Ensure your Firestore database is correctly set up and check console for details. Error: ${error.message || 'Unknown error'}.`,
       });
-      // Re-populate form with original values if save fails
       setShopName(originalShopName);
       setClientName(originalClientName);
       setPhoneNumber(originalPhoneNumber);
@@ -99,7 +96,7 @@ function NewClientContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
-          <CardDescription>Enter the client details below. Slow saving? Check Firestore indexes.</CardDescription>
+          <CardDescription>Enter client details. Slow saving? Check Firestore indexes for 'ClientDetails' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">

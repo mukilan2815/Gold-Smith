@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { ArrowLeft } from 'lucide-react';
 
-interface GivenItem {
+// Firestore data structure (matching AdminReceipts definition)
+interface GivenItemFirestore {
   productName: string;
   pureWeight: string;
   purePercent: string;
@@ -22,7 +23,7 @@ interface GivenItem {
   total: number;
 }
 
-interface ReceivedItem {
+interface ReceivedItemFirestore {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
@@ -32,15 +33,15 @@ interface ReceivedItem {
 }
 
 interface GivenData {
-  date: string | null;
-  items: GivenItem[];
+  date: string | null; // ISO string
+  items: GivenItemFirestore[];
   totalPureWeight: number;
   total: number;
 }
 
 interface ReceivedData {
-  date: string | null;
-  items: ReceivedItem[];
+  date: string | null; // ISO string
+  items: ReceivedItemFirestore[];
   totalOrnamentsWt: number;
   totalStoneWeight: number;
   totalSubTotal: number;
@@ -64,15 +65,15 @@ const getDisplayValue = (value: string | number | undefined | null, decimals = 3
     return (isNaN(num) ? 0 : num).toFixed(decimals);
 };
 
-export default function AdminDetailsPage() {
+export default function AdminDetailsListPage() {
   return (
     <Layout>
-      <AdminDetailsContent />
+      <AdminDetailsListContent />
     </Layout>
   );
 }
 
-function AdminDetailsContent() {
+function AdminDetailsListContent() {
   const [receipts, setReceipts] = useState<AdminReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -82,29 +83,30 @@ function AdminDetailsContent() {
     setLoading(true);
     try {
       const receiptsRef = collection(db, 'AdminReceipts');
+      // Querying by 'createdAt' (desc) requires an index.
       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50));
       const querySnapshot = await getDocs(q);
       const fetchedReceipts: AdminReceipt[] = [];
       querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data() as DocumentData;
+        const data = docSnap.data() as DocumentData; // Use DocumentData
         fetchedReceipts.push({
           id: docSnap.id,
           clientId: data.clientId || '',
           clientName: data.clientName || 'Unknown Client',
-          given: data.given || null,
-          received: data.received || null,
+          given: data.given || null, // Assuming structure matches GivenData or null
+          received: data.received || null, // Assuming structure matches ReceivedData or null
           status: data.status || 'empty',
-          createdAt: data.createdAt || Timestamp.now(),
-          updatedAt: data.updatedAt || Timestamp.now(),
-        } as AdminReceipt);
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(),
+        } as AdminReceipt); // Casting to AdminReceipt
       });
       setReceipts(fetchedReceipts);
     } catch (error) {
       console.error("Error fetching admin receipts for details page:", error);
       toast({ 
         variant: "destructive", 
-        title: "Error Fetching Receipts", 
-        description: "Could not load admin receipts. Ensure Firestore indexes are set for 'AdminReceipts' on 'createdAt' (descending). Check console."
+        title: "Error Fetching Admin Receipts", 
+        description: "Could not load admin receipts. This often means a Firestore index is missing. Please ensure an index on 'AdminReceipts' collection for 'createdAt' field (descending) exists. Check console and firestore.indexes.md."
       });
     } finally {
       setLoading(false);
@@ -134,13 +136,13 @@ function AdminDetailsContent() {
           </Button>
         </CardHeader>
         <CardDescription className="px-6 pb-4">
-            This page displays details of all admin receipts. Slow loading? Check Firestore indexes for 'AdminReceipts'.
+            This page displays details of all admin receipts. Slow loading? Check Firestore index for 'AdminReceipts' on 'createdAt' (descending). See firestore.indexes.md.
         </CardDescription>
       </Card>
 
       {loading ? (
         <div className="text-center py-10">
-          <p className="text-muted-foreground">Loading admin receipts... For optimal performance, ensure a descending index exists on 'createdAt' in your 'AdminReceipts' Firestore collection.</p>
+          <p className="text-muted-foreground">Loading admin receipts... If slow, ensure Firestore index for 'AdminReceipts' on 'createdAt' (descending) is active. Refer to firestore.indexes.md.</p>
         </div>
       ) : receipts.length > 0 ? (
         <ScrollArea className="h-[calc(100vh-220px)]">
@@ -157,7 +159,7 @@ function AdminDetailsContent() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle className="text-lg">{receipt.clientName}</CardTitle>
-                      <CardDescription>Receipt ID: {receipt.id}<br />Last Updated: {format(receipt.updatedAt.toDate(), 'PPP p')}</CardDescription>
+                      <CardDescription>Receipt ID: {receipt.id.substring(0,10)}...<br />Last Updated: {format(receipt.updatedAt.toDate(), 'PPP p')}</CardDescription>
                     </div>
                     <Badge variant={getStatusVariant(receipt.status)} className="capitalize">{receipt.status}</Badge>
                   </div>
@@ -250,7 +252,7 @@ function AdminDetailsContent() {
           </div>
         </ScrollArea>
       ) : (
-        <p className="text-muted-foreground text-center py-10">No admin receipts found. Slow loading? Check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending).</p>
+        <p className="text-muted-foreground text-center py-10">No admin receipts found. If receipts exist but are not showing, or if loading is slow, check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
       )}
     </div>
   );
