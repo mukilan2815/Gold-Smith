@@ -13,7 +13,7 @@ export default function Layout({children}: {children: React.ReactNode}) {
   return (
     <SidebarProvider>
       <div className="md:pl-6">
-        <div className="mx-auto max-w-7xl md:px-4">
+        <div className="mx-auto max-w-7xl"> {/* Removed md:px-4 here */}
           <div className="sticky top-0 z-40 border-b bg-background md:hidden">
             <div className="flex h-16 items-center justify-between px-4">
               <SidebarTrigger />
