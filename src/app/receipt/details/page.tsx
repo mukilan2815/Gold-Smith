@@ -220,14 +220,14 @@ function ReceiptDetailsContent() {
     ]);
   };
 
-  const handleRemoveItem = (indexToRemove: number) => {
-    if (!isEditMode) return; 
+  const handleRemoveItem = (sNoToRemove: number) => {
+    if (!isEditMode) return;
     if (items.length <= 1) {
-      toast({variant: 'destructive', title: 'Cannot Remove', description: "At least one item row is required."});
+      toast({variant: 'destructive', title: 'Cannot Remove', description: 'At least one item row is required.'});
       return;
     }
     const newItems = items
-      .filter((_, index) => index !== indexToRemove)
+      .filter(item => item.sNo !== sNoToRemove)
       .map((item, index) => ({...item, sNo: index + 1}));
     setItems(newItems);
   };
@@ -550,16 +550,16 @@ function ReceiptDetailsContent() {
   return (
     <Layout>
       <div className="flex flex-col items-center justify-start min-h-screen bg-secondary py-4 md:py-8 px-1 md:px-2">
-        <Card className="w-full"> 
-          <CardHeader className="space-y-1 p-4"> {/* Reduced padding */}
-            <div className="flex justify-between items-center">
+        <Card className="w-full max-w-none"> 
+          <CardHeader className="space-y-1 p-4">
+            <div className="flex flex-wrap justify-between items-center gap-2">
               <div>
                 <CardTitle className="text-2xl">Client Receipt</CardTitle>
                 <CardDescription>
                   Client: {clientNameParam} {existingReceiptId ? `(ID: ${existingReceiptId})` : '(New Receipt)'}
                 </CardDescription>
               </div>
-              <div className="flex justify-end gap-2"> {/* Reduced gap */}
+              <div className="flex flex-wrap justify-end gap-2">
                 {!isEditMode && existingReceiptId ? ( 
                   <>
                     <Button onClick={handleEditReceipt} variant="outline" size="sm">
@@ -589,14 +589,14 @@ function ReceiptDetailsContent() {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-4 p-4 pt-0"> {/* Reduced padding and gap */}
+          <CardContent className="grid gap-4 p-4 pt-0">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant={'outline'}
                     className={cn(
-                      'w-full md:w-auto justify-start text-left font-normal', 
+                      'w-full justify-start text-left font-normal', 
                       !date && 'text-muted-foreground'
                     )}
                     disabled={!isEditMode} 
@@ -613,7 +613,7 @@ function ReceiptDetailsContent() {
               </Popover>
 
               <Select onValueChange={setMetal} value={metal} disabled={!isEditMode}>
-                <SelectTrigger className="w-full md:w-auto"> 
+                <SelectTrigger className="w-full"> 
                   <SelectValue placeholder="Select Metal Type" />
                 </SelectTrigger>
                 {isEditMode && ( 
@@ -636,7 +636,7 @@ function ReceiptDetailsContent() {
                   step="0.001"
                 />
                 <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}>
-                  <SelectTrigger className="w-[100px] md:w-auto"> 
+                  <SelectTrigger className="w-[100px]"> 
                     <SelectValue placeholder="Unit" />
                   </SelectTrigger>
                   {isEditMode && ( 
@@ -653,31 +653,43 @@ function ReceiptDetailsContent() {
             <div className="overflow-x-auto">
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
               <table className="w-full table-fixed border border-collapse border-border">
+                <colgroup>
+                    <col style={{ width: '5%' }} />  {/* S.No. */}
+                    <col style={{ width: '20%' }} /> {/* Item Name */}
+                    <col style={{ width: '10%' }} /> {/* Tag */}
+                    <col style={{ width: '10%' }} /> {/* Gross (wt) */}
+                    <col style={{ width: '10%' }} /> {/* Stone (wt) */}
+                    <col style={{ width: '10%' }} /> {/* Net (wt) */}
+                    <col style={{ width: '12%' }} /> {/* Melting/Touch (%) */}
+                    <col style={{ width: '10%' }} /> {/* Final (wt) */}
+                    <col style={{ width: '10%' }} /> {/* Stone Amt */}
+                    <col style={{ width: '8%' }} />  {/* Action */}
+                </colgroup>
                 <thead>
                   <tr className="bg-muted">
-                    <th className="p-2 border text-center text-sm w-[5%]">S.No.</th>
-                    <th className="p-2 border text-left text-sm w-[15%]">Item Name</th>
-                    <th className="p-2 border text-left text-sm w-[8%]">Tag</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Gross (wt)</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Stone (wt)</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Net (wt)</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Melting/Touch (%)</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Final (wt)</th>
-                    <th className="p-2 border text-right text-sm w-[10%]">Stone Amt</th>
-                    <th className="p-2 border text-center text-sm w-[7%]">Action</th>
+                    <th className="p-2 border text-center text-xs sm:text-sm">S.No.</th>
+                    <th className="p-2 border text-left text-xs sm:text-sm">Item Name</th>
+                    <th className="p-2 border text-left text-xs sm:text-sm">Tag</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Gross (wt)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Stone (wt)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Net (wt)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Melting/Touch (%)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Final (wt)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">Stone Amt</th>
+                    <th className="p-2 border text-center text-xs sm:text-sm">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, index) => (
                     <tr key={item.sNo}>
-                      <td className="p-1 border align-middle text-sm text-center">{item.sNo}</td>
+                      <td className="p-1 border align-middle text-xs sm:text-sm text-center">{item.sNo}</td>
                       <td className="p-1 border align-middle">
                         <Input
                           type="text"
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 w-full"
+                          className="text-xs sm:text-sm h-8 w-full"
                           placeholder="Item name"
                         />
                       </td>
@@ -687,7 +699,7 @@ function ReceiptDetailsContent() {
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 w-full"
+                          className="text-xs sm:text-sm h-8 w-full"
                           placeholder="Tag"
                         />
                       </td>
@@ -697,7 +709,7 @@ function ReceiptDetailsContent() {
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full"
+                          className="text-xs sm:text-sm h-8 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
                         />
@@ -708,12 +720,12 @@ function ReceiptDetailsContent() {
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full"
+                          className="text-xs sm:text-sm h-8 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
                         />
                       </td>
-                      <td className="p-1 border text-right align-middle text-sm bg-muted/30">
+                      <td className="p-1 border text-right align-middle text-xs sm:text-sm bg-muted/30">
                         {item.netWt}
                       </td>
                       <td className="p-1 border align-middle">
@@ -722,12 +734,12 @@ function ReceiptDetailsContent() {
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full"
+                          className="text-xs sm:text-sm h-8 text-right w-full"
                           step="0.01"
                           placeholder="0.00"
                         />
                       </td>
-                      <td className="p-1 border text-right align-middle text-sm bg-muted/30">
+                      <td className="p-1 border text-right align-middle text-xs sm:text-sm bg-muted/30">
                         {item.finalWt}
                       </td>
                       <td className="p-1 border align-middle">
@@ -736,7 +748,7 @@ function ReceiptDetailsContent() {
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
                           disabled={!isEditMode}
-                          className="text-sm h-8 text-right w-full"
+                          className="text-xs sm:text-sm h-8 text-right w-full"
                           step="0.01"
                           placeholder="0.00"
                         />
@@ -746,7 +758,7 @@ function ReceiptDetailsContent() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleRemoveItem(index)}
+                            onClick={() => handleRemoveItem(item.sNo)}
                             disabled={items.length <= 1}
                             className="text-destructive hover:text-destructive/80 h-8 w-8"
                           >
@@ -757,15 +769,15 @@ function ReceiptDetailsContent() {
                     </tr>
                   ))}
                   <tr className="bg-muted font-semibold">
-                    <td className="p-2 border text-sm text-right" colSpan={3}> {/* Adjusted colSpan for S.No, Item Name, Tag */}
+                    <td className="p-2 border text-xs sm:text-sm text-right" colSpan={3}>
                       Total:
                     </td>
-                    <td className="p-2 border text-right text-sm">{calculateTotal('grossWt').toFixed(3)}</td>
-                    <td className="p-2 border text-right text-sm">{calculateTotal('stoneWt').toFixed(3)}</td>
-                    <td className="p-2 border text-right text-sm">{calculateTotal('netWt').toFixed(3)}</td>
+                    <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('grossWt').toFixed(3)}</td>
+                    <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('stoneWt').toFixed(3)}</td>
+                    <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('netWt').toFixed(3)}</td>
                     <td className="p-2 border"></td>
-                    <td className="p-2 border text-right text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
-                    <td className="p-2 border text-right text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td>
+                    <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
+                    <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td>
                     <td className="p-2 border"></td> 
                   </tr>
                 </tbody>
@@ -782,4 +794,3 @@ function ReceiptDetailsContent() {
     </Layout>
   );
 }
-
