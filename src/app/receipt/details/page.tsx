@@ -43,7 +43,7 @@ import {cn} from '@/lib/utils';
 import {db} from '@/lib/firebase'; // Import Firestore instance
 
 interface ReceiptItem {
-  sNo: number; // Changed to non-optional, will always be managed
+  sNo: number; 
   itemName: string;
   tag: string;
   grossWt: string;
@@ -133,6 +133,7 @@ function ReceiptDetailsContent() {
     setWeightUnit('');
     setItems([{sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''}]);
     setInitialState(null);
+    setIsEditMode(true); // Ensure new receipts start in edit mode
   }, []);
 
   const fetchReceipt = useCallback(async () => {
@@ -146,15 +147,21 @@ function ReceiptDetailsContent() {
           const data = docSnap.data() as ClientReceiptData;
           const loadedDate = data.issueDate && isValid(parseISO(data.issueDate)) ? parseISO(data.issueDate) : undefined;
           const loadedMetal = data.metalType || '';
-          const loadedWeight = ''; 
-          const loadedWeightUnit = '';
+          // Overall weight and unit are optional and not part of the core tableData sums,
+          // so their handling depends on whether they were saved.
+          // For this iteration, we assume they are not being explicitly reloaded from table data sums.
+          const loadedWeight = ''; // Or load if saved separately
+          const loadedWeightUnit = ''; // Or load if saved separately
+
           const loadedItems = data.tableData && data.tableData.length > 0
             ? data.tableData.map((item, index) => {
                 const grossWtVal = parseFloat(item.grossWt || '0');
                 const stoneWtVal = parseFloat(item.stoneWt || '0');
                 const meltingTouchVal = parseFloat(item.meltingTouch || '0');
                 const netWtVal = grossWtVal - stoneWtVal;
-                const finalWtVal = (netWtVal * meltingTouchVal) / 100;
+                // Ensure netWt is non-negative
+                const calculatedNetWt = Math.max(0, netWtVal);
+                const finalWtVal = meltingTouchVal === 0 ? 0 : (calculatedNetWt * meltingTouchVal) / 100;
                 return {
                   ...item,
                   sNo: index + 1,
@@ -162,7 +169,7 @@ function ReceiptDetailsContent() {
                   stoneWt: item.stoneWt || '',
                   meltingTouch: item.meltingTouch || '',
                   stoneAmt: item.stoneAmt || '',
-                  netWt: netWtVal.toFixed(3),
+                  netWt: calculatedNetWt.toFixed(3),
                   finalWt: finalWtVal.toFixed(3),
                 };
               })
@@ -178,22 +185,20 @@ function ReceiptDetailsContent() {
           setIsEditMode(false); 
         } else {
           toast({variant: 'destructive', title: 'Not Found', description: 'Receipt not found. Creating new.'});
-          setExistingReceiptId(null);
+          setExistingReceiptId(null); // Important: if not found, it's a new receipt
           resetToNewReceiptState();
-          setIsEditMode(true);
         }
       } catch (error) {
         console.error('Error fetching receipt:', error);
         toast({variant: 'destructive', title: 'Error', description: 'Could not load receipt details.'});
         setExistingReceiptId(null);
         resetToNewReceiptState();
-        setIsEditMode(true);
       } finally {
         setIsLoading(false);
       }
     } else {
+      // This case handles when creating a new receipt (no receiptIdParam)
       resetToNewReceiptState();
-      setIsEditMode(true);
       setIsLoading(false);
     }
   }, [clientIdParam, existingReceiptId, toast, resetToNewReceiptState]);
@@ -203,14 +208,16 @@ function ReceiptDetailsContent() {
   }, [fetchClientData]);
 
   useEffect(() => {
-    if (existingReceiptId) {
+    // This effect now correctly distinguishes between loading an existing receipt and starting a new one.
+    if (receiptIdParam) { // If there's an ID in URL, try to load it.
+      setExistingReceiptId(receiptIdParam); // Set it to trigger fetchReceipt
       fetchReceipt();
-    } else {
+    } else { // No ID in URL, so it's a new receipt.
       resetToNewReceiptState();
-      setIsEditMode(true);
-      setIsLoading(false);
+      setIsLoading(false); // No loading needed for new receipt.
     }
-  }, [existingReceiptId, fetchReceipt, resetToNewReceiptState]);
+  }, [receiptIdParam, fetchReceipt, resetToNewReceiptState]); // Depends on original receiptIdParam
+
 
   const handleAddItem = () => {
     if (!isEditMode) return;
@@ -228,9 +235,10 @@ function ReceiptDetailsContent() {
     }
     const newItems = items
       .filter(item => item.sNo !== sNoToRemove)
-      .map((item, index) => ({...item, sNo: index + 1}));
+      .map((item, index) => ({...item, sNo: index + 1})); // Re-assign sNo after filtering
     setItems(newItems);
   };
+
 
   const handleInputChange = (index: number, field: keyof ReceiptItem, value: any) => {
     if (!isEditMode) return;
@@ -243,9 +251,11 @@ function ReceiptDetailsContent() {
       const stoneWt = parseFloat(currentItem.stoneWt) || 0;
       const meltingTouch = parseFloat(currentItem.meltingTouch) || 0;
 
-      currentItem.netWt = (grossWt - stoneWt).toFixed(3);
-      const netWt = parseFloat(currentItem.netWt) || 0;
-      currentItem.finalWt = meltingTouch === 0 ? '0.000' : ((netWt * meltingTouch) / 100).toFixed(3);
+      // Ensure netWt is not negative
+      const netWtValue = Math.max(0, grossWt - stoneWt);
+      currentItem.netWt = netWtValue.toFixed(3);
+      
+      currentItem.finalWt = meltingTouch === 0 ? '0.000' : ((netWtValue * meltingTouch) / 100).toFixed(3);
       
       newItems[index] = currentItem;
       return newItems;
@@ -253,15 +263,21 @@ function ReceiptDetailsContent() {
   };
 
   const calculateTotal = (field: keyof Pick<ReceiptItem, 'grossWt' | 'stoneWt' | 'netWt' | 'finalWt' | 'stoneAmt'>) => {
-    const validItems = items.filter(item => item[field] && !isNaN(parseFloat(item[field])));
+    // Filter out items where the field is empty or not a valid number string BEFORE parsing
+    const validItems = items.filter(item => {
+      const val = item[field];
+      return typeof val === 'string' && val.trim() !== '' && !isNaN(parseFloat(val));
+    });
+    
     return validItems.reduce((acc, item) => {
-      const value = parseFloat(item[field]);
+      const value = parseFloat(item[field]); // parseFloat should be safe here due to filter
       return acc + value;
     }, 0);
   };
 
   const handleEditReceipt = () => {
-    setInitialState({date, metal, weight, weightUnit, items});
+    // Store current state to allow cancellation
+    setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(items))}); // Deep copy items
     setIsEditMode(true);
   };
 
@@ -271,16 +287,18 @@ function ReceiptDetailsContent() {
       setMetal(initialState.metal);
       setWeight(initialState.weight);
       setWeightUnit(initialState.weightUnit);
-      setItems(initialState.items);
+      setItems(JSON.parse(JSON.stringify(initialState.items))); // Restore from deep copy
     } else {
-      if (existingReceiptId) {
-        fetchReceipt(); 
-      } else {
-        resetToNewReceiptState();
-      }
+        // If no initialState (e.g. new receipt was cancelled before first save), reset or fetch
+        if (existingReceiptId) {
+            fetchReceipt(); // Re-fetch original if it was an existing receipt
+        } else {
+            resetToNewReceiptState(); // Reset to blank if it was a new receipt
+        }
     }
-    setIsEditMode(false);
+    setIsEditMode(false); // Always exit edit mode on cancel
   };
+
 
   const handleSaveReceipt = async () => {
     if (!clientIdParam) {
@@ -295,6 +313,7 @@ function ReceiptDetailsContent() {
       toast({variant: 'destructive', title: 'Error', description: 'Please select a metal type.'});
       return;
     }
+    // Filter out items that are completely empty or only have sNo
     const validItems = items.filter(item =>
       item.itemName.trim() !== '' ||
       item.tag.trim() !== '' ||
@@ -315,6 +334,7 @@ function ReceiptDetailsContent() {
       description: 'Please wait.',
     }).id;
 
+    // Calculate totals based on `validItems` to ensure consistency
     const totalGrossWt = validItems.reduce((acc, item) => acc + (parseFloat(item.grossWt) || 0), 0);
     const totalStoneWt = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneWt) || 0), 0);
     const totalNetWt = validItems.reduce((acc, item) => acc + (parseFloat(item.netWt) || 0), 0);
@@ -323,19 +343,19 @@ function ReceiptDetailsContent() {
 
     const receiptData: Omit<ClientReceiptData, 'createdAt' | 'updatedAt'> = {
       clientId: clientIdParam,
-      clientName: clientNameParam,
+      clientName: clientNameParam, // Ensure clientNameParam is always up-to-date or fetched
       shopName: clientShopName,
       phoneNumber: clientPhoneNumber,
       metalType: metal,
-      issueDate: date.toISOString(),
-      tableData: validItems.map(({sNo, ...item}) => ({
+      issueDate: date.toISOString(), // Store date as ISO string
+      tableData: validItems.map(({sNo, ...item}) => ({ // Exclude sNo from Firestore
         itemName: item.itemName || '',
         tag: item.tag || '',
         grossWt: item.grossWt || '0',
         stoneWt: item.stoneWt || '0',
-        netWt: item.netWt || '0.000',
+        netWt: item.netWt || '0.000', // Already calculated and stored in state
         meltingTouch: item.meltingTouch || '0',
-        finalWt: item.finalWt || '0.000',
+        finalWt: item.finalWt || '0.000', // Already calculated and stored in state
         stoneAmt: item.stoneAmt || '0',
       })),
       totals: {
@@ -349,37 +369,42 @@ function ReceiptDetailsContent() {
 
     try {
       if (existingReceiptId) {
+        // Update existing document
         await updateDoc(doc(db, 'ClientReceipts', existingReceiptId), {
           ...receiptData,
           updatedAt: serverTimestamp(),
         });
         toast({id: toastId, title: 'Receipt Updated!', description: 'The receipt has been saved successfully.'});
       } else {
+        // Add new document
         const newReceiptRef = await addDoc(collection(db, 'ClientReceipts'), {
           ...receiptData,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        setExistingReceiptId(newReceiptRef.id);
+        setExistingReceiptId(newReceiptRef.id); // Store the new ID
+        // Update URL without full page reload
         router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceiptRef.id}`, { scroll: false });
         toast({id: toastId, title: 'Receipt Created!', description: 'The receipt has been saved successfully.'});
       }
+      // After successful save, update the initialState to current saved state
       const savedItemsForInitialState = validItems.map((it, idx) => {
-        const grossWtVal = parseFloat(it.grossWt || '0');
-        const stoneWtVal = parseFloat(it.stoneWt || '0');
-        const meltingTouchVal = parseFloat(it.meltingTouch || '0');
-        const netWtVal = grossWtVal - stoneWtVal;
-        const finalWtVal = meltingTouchVal === 0 ? 0 : (netWtVal * meltingTouchVal) / 100;
-        return {
-            ...it,
-            sNo: idx + 1,
-            netWt: netWtVal.toFixed(3),
-            finalWt: finalWtVal.toFixed(3),
-        };
+          // Recalculate netWt and finalWt based on potentially cleaned/validated data
+          const grossWtVal = parseFloat(it.grossWt || '0');
+          const stoneWtVal = parseFloat(it.stoneWt || '0');
+          const meltingTouchVal = parseFloat(it.meltingTouch || '0');
+          const netWtVal = Math.max(0, grossWtVal - stoneWtVal);
+          const finalWtVal = meltingTouchVal === 0 ? 0 : (netWtVal * meltingTouchVal) / 100;
+          return {
+              ...it,
+              sNo: idx + 1, // Ensure sNo is consistent for UI
+              netWt: netWtVal.toFixed(3),
+              finalWt: finalWtVal.toFixed(3),
+          };
       });
       const savedInitialState = {date, metal, weight, weightUnit, items: savedItemsForInitialState};
       setInitialState(savedInitialState);
-      setIsEditMode(false);
+      setIsEditMode(false); // Exit edit mode after saving
     } catch (error) {
       console.error('Error saving receipt:', error);
       toast({id: toastId, variant: 'destructive', title: 'Error', description: 'Failed to save receipt.'});
@@ -387,6 +412,7 @@ function ReceiptDetailsContent() {
       setIsSaving(false);
     }
   };
+
 
   const downloadReceipt = () => {
     if (!date) {
@@ -463,11 +489,12 @@ function ReceiptDetailsContent() {
       item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '0.00',
     ]);
 
-    const totalGrossWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.grossWt) || 0), 0);
-    const totalStoneWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneWt) || 0), 0);
-    const totalNetWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.netWt) || 0), 0);
-    const totalFinalWtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.finalWt) || 0), 0);
-    const totalStoneAmtPdf = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneAmt) || 0), 0);
+    const totalGrossWtPdf = calculateTotal('grossWt');
+    const totalStoneWtPdf = calculateTotal('stoneWt');
+    const totalNetWtPdf = calculateTotal('netWt');
+    const totalFinalWtPdf = calculateTotal('finalWt');
+    const totalStoneAmtPdf = calculateTotal('stoneAmt');
+    
 
     autoTable(doc, {
       head: [tableColumn],
@@ -507,8 +534,8 @@ function ReceiptDetailsContent() {
       tableLineWidth: 0.1,
       margin: {left: margin + 2, right: margin + 2}, 
       didParseCell: function (data) {
-        const numericColumns = [0, 3, 4, 5, 6, 7, 8]; // S.No, Gross, Stone, Net, M/T, Final, Stone Amt
-         if (data.column.index === 0 && (data.section === 'body' || data.section === 'foot')) { // S.No. column
+        const numericColumns = [0, 3, 4, 5, 6, 7, 8]; 
+         if (data.column.index === 0 && (data.section === 'body' || data.section === 'foot')) { 
             data.cell.styles.halign = 'center';
         } else if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
           data.cell.styles.halign = 'right';
@@ -520,12 +547,12 @@ function ReceiptDetailsContent() {
       showFoot: 'lastPage',
       foot: [
         [
-          {content: '', styles: {}}, // Empty for S.No.
-          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}}, // Total spans Item Name and Tag
+          {content: '', styles: {halign: 'center'}}, // S.No.
+          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}}, // Spans Item Name and Tag
           {content: totalGrossWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalStoneWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalNetWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
-          '', 
+          {content: '', styles: {halign: 'right'}}, // M/T %
           {content: totalFinalWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalStoneAmtPdf.toFixed(2), styles: {fontStyle: 'bold', halign: 'right'}},
         ],
@@ -569,20 +596,18 @@ function ReceiptDetailsContent() {
                       <Download className="mr-2 h-4 w-4" /> Download Receipt
                     </Button>
                   </>
-                ) : isEditMode && existingReceiptId ? ( 
+                ) : isEditMode ? ( // Covers both new receipt and editing existing
                   <>
                     <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
-                      <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save Changes'}
+                      <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (existingReceiptId ? 'Save Changes' : 'Create Receipt')}
                     </Button>
-                    <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving} size="sm">
-                      <XCircle className="mr-2 h-4 w-4" /> Cancel Edit
-                    </Button>
+                    {existingReceiptId && ( // Only show Cancel Edit if it's an existing receipt being edited
+                       <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving} size="sm">
+                         <XCircle className="mr-2 h-4 w-4" /> Cancel Edit
+                       </Button>
+                    )}
                   </>
-                ) : ( 
-                  <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
-                    <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Create Receipt'}
-                  </Button>
-                )}
+                ) : null } 
                 <Button variant="secondary" onClick={() => router.back()} disabled={isSaving} size="sm">
                   Back
                 </Button>
@@ -654,16 +679,16 @@ function ReceiptDetailsContent() {
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
               <table className="w-full table-fixed border border-collapse border-border">
                 <colgroup>
-                    <col style={{ width: '5%' }} />  {/* S.No. */}
+                    <col style={{ width: '4%' }} />   {/* S.No. */}
                     <col style={{ width: '20%' }} /> {/* Item Name */}
-                    <col style={{ width: '10%' }} /> {/* Tag */}
-                    <col style={{ width: '10%' }} /> {/* Gross (wt) */}
-                    <col style={{ width: '10%' }} /> {/* Stone (wt) */}
+                    <col style={{ width: '8%' }} />  {/* Tag */}
+                    <col style={{ width: '12%' }} /> {/* Gross (wt) */}
+                    <col style={{ width: '12%' }} /> {/* Stone (wt) */}
                     <col style={{ width: '10%' }} /> {/* Net (wt) */}
-                    <col style={{ width: '12%' }} /> {/* Melting/Touch (%) */}
+                    <col style={{ width: '9%' }} /> {/* Melting/Touch (%) */}
                     <col style={{ width: '10%' }} /> {/* Final (wt) */}
-                    <col style={{ width: '10%' }} /> {/* Stone Amt */}
-                    <col style={{ width: '8%' }} />  {/* Action */}
+                    <col style={{ width: '12%' }} /> {/* Stone Amt */}
+                    <col style={{ width: '3%' }} />   {/* Action */}
                 </colgroup>
                 <thead>
                   <tr className="bg-muted">
@@ -673,7 +698,7 @@ function ReceiptDetailsContent() {
                     <th className="p-2 border text-right text-xs sm:text-sm">Gross (wt)</th>
                     <th className="p-2 border text-right text-xs sm:text-sm">Stone (wt)</th>
                     <th className="p-2 border text-right text-xs sm:text-sm">Net (wt)</th>
-                    <th className="p-2 border text-right text-xs sm:text-sm">Melting/Touch (%)</th>
+                    <th className="p-2 border text-right text-xs sm:text-sm">M/T (%)</th>
                     <th className="p-2 border text-right text-xs sm:text-sm">Final (wt)</th>
                     <th className="p-2 border text-right text-xs sm:text-sm">Stone Amt</th>
                     <th className="p-2 border text-center text-xs sm:text-sm">Action</th>
@@ -759,7 +784,7 @@ function ReceiptDetailsContent() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveItem(item.sNo)}
-                            disabled={items.length <= 1}
+                            disabled={items.length <= 1 && !isEditMode} // Disable if not in edit mode or only one item
                             className="text-destructive hover:text-destructive/80 h-8 w-8"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -769,16 +794,17 @@ function ReceiptDetailsContent() {
                     </tr>
                   ))}
                   <tr className="bg-muted font-semibold">
-                    <td className="p-2 border text-xs sm:text-sm text-right" colSpan={3}>
+                    <td className="p-2 border"></td> {/* S.No. Total - Empty */}
+                    <td className="p-2 border text-right text-xs sm:text-sm" colSpan={2}> {/* Spans Item Name & Tag */}
                       Total:
                     </td>
                     <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('grossWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('stoneWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('netWt').toFixed(3)}</td>
-                    <td className="p-2 border"></td>
+                    <td className="p-2 border"></td> {/* M/T Total - Empty */}
                     <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('finalWt').toFixed(3)}</td>
                     <td className="p-2 border text-right text-xs sm:text-sm">{calculateTotal('stoneAmt').toFixed(2)}</td>
-                    <td className="p-2 border"></td> 
+                    <td className="p-2 border"></td> {/* Action Total - Empty */}
                   </tr>
                 </tbody>
               </table>
