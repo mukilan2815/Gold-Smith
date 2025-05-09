@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { ArrowLeft } from 'lucide-react';
 
-// Interfaces from AdminBill / AdminReceiptDetails
 interface GivenItem {
   productName: string;
   pureWeight: string;
@@ -33,14 +32,14 @@ interface ReceivedItem {
 }
 
 interface GivenData {
-  date: string | null; // ISO String or null
+  date: string | null;
   items: GivenItem[];
   totalPureWeight: number;
   total: number;
 }
 
 interface ReceivedData {
-  date: string | null; // ISO String or null
+  date: string | null;
   items: ReceivedItem[];
   totalOrnamentsWt: number;
   totalStoneWeight: number;
@@ -64,7 +63,6 @@ const getDisplayValue = (value: string | number | undefined | null, decimals = 3
     const num = typeof value === 'string' ? parseFloat(value) : value;
     return (isNaN(num) ? 0 : num).toFixed(decimals);
 };
-
 
 export default function AdminDetailsPage() {
   return (
@@ -106,7 +104,7 @@ function AdminDetailsContent() {
       toast({ 
         variant: "destructive", 
         title: "Error Fetching Receipts", 
-        description: "Could not load admin receipts. This query sorts by 'createdAt'. Ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific errors."
+        description: "Could not load admin receipts. Ensure Firestore indexes are set for 'AdminReceipts' on 'createdAt' (descending). Check console."
       });
     } finally {
       setLoading(false);
@@ -136,16 +134,16 @@ function AdminDetailsContent() {
           </Button>
         </CardHeader>
         <CardDescription className="px-6 pb-4">
-            This page displays details of all admin receipts. For actions like edit or view PDF, please use the Admin Bill page.
+            This page displays details of all admin receipts. Slow loading? Check Firestore indexes for 'AdminReceipts'.
         </CardDescription>
       </Card>
 
       {loading ? (
         <div className="text-center py-10">
-          <p className="text-muted-foreground">Loading admin receipts... Ensure Firestore indexes are set up for optimal performance on AdminReceipts (createdAt descending).</p>
+          <p className="text-muted-foreground">Loading admin receipts... For optimal performance, ensure a descending index exists on 'createdAt' in your 'AdminReceipts' Firestore collection.</p>
         </div>
       ) : receipts.length > 0 ? (
-        <ScrollArea className="h-[calc(100vh-220px)]"> {/* Adjust height as needed */}
+        <ScrollArea className="h-[calc(100vh-220px)]">
           <div className="space-y-6">
             {receipts.map((receipt) => {
                 const formattedDateGiven = receipt.given?.date && isValid(parseISO(receipt.given.date))
@@ -159,10 +157,7 @@ function AdminDetailsContent() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle className="text-lg">{receipt.clientName}</CardTitle>
-                      <CardDescription>Receipt ID: {receipt.id}
-                        <br />
-                        Last Updated: {format(receipt.updatedAt.toDate(), 'PPP p')}
-                      </CardDescription>
+                      <CardDescription>Receipt ID: {receipt.id}<br />Last Updated: {format(receipt.updatedAt.toDate(), 'PPP p')}</CardDescription>
                     </div>
                     <Badge variant={getStatusVariant(receipt.status)} className="capitalize">{receipt.status}</Badge>
                   </div>
@@ -205,9 +200,7 @@ function AdminDetailsContent() {
                       </div>
                     </div>
                   )}
-
-                  {receipt.given && receipt.received && <Separator className="my-0" />}
-                  
+                  {receipt.given && receipt.received && receipt.given.items.length > 0 && receipt.received.items.length > 0 && <Separator className="my-0" />}
                   {receipt.received && receipt.received.items.length > 0 && (
                      <div className="p-4">
                         <h3 className="font-semibold mb-1">Received Details</h3>
@@ -248,7 +241,7 @@ function AdminDetailsContent() {
                         </div>
                      </div>
                   )}
-                   {!receipt.given && !receipt.received && (
+                   {(!receipt.given || receipt.given.items.length === 0) && (!receipt.received || receipt.received.items.length === 0) && (
                         <p className="p-4 text-muted-foreground">This admin receipt is currently empty.</p>
                    )}
                 </CardContent>
@@ -257,7 +250,7 @@ function AdminDetailsContent() {
           </div>
         </ScrollArea>
       ) : (
-        <p className="text-muted-foreground text-center py-10">No admin receipts found. If loading took long, please check Firestore indexes.</p>
+        <p className="text-muted-foreground text-center py-10">No admin receipts found. Slow loading? Check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending).</p>
       )}
     </div>
   );

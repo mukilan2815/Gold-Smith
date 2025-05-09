@@ -1,4 +1,3 @@
-
 'use client';
 
 import Layout from '@/components/Layout';
@@ -31,15 +30,10 @@ function NewClientContent() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const {toast, dismiss} = useToast();
+  const {toast} = useToast(); // Removed dismiss as it's part of toast object now
 
   const handleSaveClient = async () => {
-    if (
-      !shopName.trim() ||
-      !clientName.trim() ||
-      !phoneNumber.trim() ||
-      !address.trim()
-    ) {
+    if (!shopName.trim() || !clientName.trim() || !phoneNumber.trim() || !address.trim()) {
       toast({
         variant: 'destructive',
         title: 'Validation Error',
@@ -51,13 +45,18 @@ function NewClientContent() {
     setIsSaving(true);
     const savingToast = toast({
       title: 'Saving Client...',
-      description: 'Please wait. This may take a moment depending on network and database speed.',
+      description: 'Please wait. If this takes too long, ensure Firestore indexes are set up for ClientDetails (e.g., on createdAt).',
     });
 
+    const originalShopName = shopName;
+    const originalClientName = clientName;
+    const originalPhoneNumber = phoneNumber;
+    const originalAddress = address;
+
     try {
-      const newClientRef = doc(collection(db, 'ClientDetails')); // Generate ID client-side for optimistic updates
-      const newClient = {
-        id: newClientRef.id, // Store the generated ID
+      const newClientRef = doc(collection(db, 'ClientDetails'));
+      const newClientData = {
+        // id: newClientRef.id, // No longer storing ID within the document itself as Firestore provides it
         shopName: shopName.trim(),
         clientName: clientName.trim(),
         phoneNumber: phoneNumber.trim(),
@@ -65,29 +64,31 @@ function NewClientContent() {
         createdAt: serverTimestamp(),
       };
 
-      // Optimistically clear form
+      await setDoc(newClientRef, newClientData);
+
+      // Clear form only after successful save
       setShopName('');
       setClientName('');
       setPhoneNumber('');
       setAddress('');
       
-      await setDoc(newClientRef, newClient);
-
-      dismiss(savingToast.id); // Dismiss "Saving..." toast
-      toast({
+      toast.update(savingToast.id, { // Use toast.update
         title: 'Client Saved!',
-        description: `${newClient.clientName}'s details saved successfully. ID: ${newClient.id}`,
+        description: `${newClientData.clientName}'s details saved successfully. ID: ${newClientRef.id}`,
       });
+
     } catch (error: any) {
       console.error('Error adding client to Firestore: ', error);
-      dismiss(savingToast.id); // Dismiss "Saving..." toast
-      toast({
+      toast.update(savingToast.id, { // Use toast.update
         variant: 'destructive',
         title: 'Save Error',
-        description: `Could not save client details. Error: ${error.message || 'Unknown error'}. If this persists, check network and Firestore status.`,
+        description: `Could not save client details. Error: ${error.message || 'Unknown error'}. Check network, Firestore status, and console.`,
       });
-      // Optionally, re-populate form with original values if save fails and form was cleared
-      // setShopName(newClient.shopName); // etc.
+      // Re-populate form with original values if save fails
+      setShopName(originalShopName);
+      setClientName(originalClientName);
+      setPhoneNumber(originalPhoneNumber);
+      setAddress(originalAddress);
     } finally {
       setIsSaving(false);
     }
@@ -98,52 +99,24 @@ function NewClientContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
-          <CardDescription>Enter the client details below.</CardDescription>
+          <CardDescription>Enter the client details below. Slow saving? Check Firestore indexes.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
             <label htmlFor="shopName">Shop Name</label>
-            <Input
-              id="shopName"
-              value={shopName}
-              onChange={e => setShopName(e.target.value)}
-              maxLength={50}
-              disabled={isSaving}
-              placeholder="Enter shop name"
-            />
+            <Input id="shopName" value={shopName} onChange={e => setShopName(e.target.value)} maxLength={50} disabled={isSaving} placeholder="Enter shop name"/>
           </div>
           <div className="grid gap-2">
             <label htmlFor="clientName">Client Name</label>
-            <Input
-              id="clientName"
-              value={clientName}
-              onChange={e => setClientName(e.target.value)}
-              maxLength={50}
-              disabled={isSaving}
-              placeholder="Enter client name"
-            />
+            <Input id="clientName" value={clientName} onChange={e => setClientName(e.target.value)} maxLength={50} disabled={isSaving} placeholder="Enter client name"/>
           </div>
           <div className="grid gap-2">
             <label htmlFor="phoneNumber">Phone Number</label>
-            <Input
-              id="phoneNumber"
-              type="tel"
-              value={phoneNumber}
-              onChange={e => setPhoneNumber(e.target.value)}
-              disabled={isSaving}
-              placeholder="Enter phone number"
-            />
+            <Input id="phoneNumber" type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} disabled={isSaving} placeholder="Enter phone number"/>
           </div>
           <div className="grid gap-2">
             <label htmlFor="address">Address</label>
-            <Textarea
-              id="address"
-              value={address}
-              onChange={e => setAddress(e.target.value)}
-              disabled={isSaving}
-              placeholder="Enter full address"
-              rows={3}
-            />
+            <Textarea id="address" value={address} onChange={e => setAddress(e.target.value)} disabled={isSaving} placeholder="Enter full address" rows={3}/>
           </div>
           <Button onClick={handleSaveClient} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save Client'}

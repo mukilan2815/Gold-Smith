@@ -59,7 +59,7 @@ function CustomerDetailsContent() {
       toast({ 
         variant: "destructive", 
         title: "Error fetching clients", 
-        description: "Could not load clients for Customer Details. This query sorts by 'createdAt'. Ensure all 'ClientDetails' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages." 
+        description: "Could not load clients. Ensure Firestore indexes are set up for 'ClientDetails' on 'createdAt' (descending). Check console." 
       });
     } finally {
       setLoading(false);
@@ -73,19 +73,13 @@ function CustomerDetailsContent() {
   const filteredClients = useMemo(() => {
     let currentClients = [...clients];
     if (debouncedShopName.trim() !== '') {
-      currentClients = currentClients.filter((client) =>
-        client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
-      );
+      currentClients = currentClients.filter((client) => client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase()));
     }
     if (debouncedClientName.trim() !== '') {
-      currentClients = currentClients.filter((client) =>
-        client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase())
-      );
+      currentClients = currentClients.filter((client) => client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase()));
     }
     if (debouncedPhoneNumber.trim() !== '') {
-      currentClients = currentClients.filter((client) =>
-        client.phoneNumber?.includes(debouncedPhoneNumber)
-      );
+      currentClients = currentClients.filter((client) => client.phoneNumber?.includes(debouncedPhoneNumber));
     }
     return currentClients;
   }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, clients]);
@@ -99,63 +93,37 @@ function CustomerDetailsContent() {
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Customer Details - Select Client</CardTitle>
-          <CardDescription>Filter and select a client to view their details and receipts.</CardDescription>
+          <CardDescription>Filter and select a client. Slow loading? Check Firestore indexes for 'ClientDetails'.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              type="text"
-              placeholder="Filter by Shop Name"
-              value={shopNameFilter}
-              onChange={(e) => setShopNameFilter(e.target.value)}
-              className="rounded-md"
-            />
-            <Input
-              type="text"
-              placeholder="Filter by Client Name"
-              value={clientNameFilter}
-              onChange={(e) => setClientNameFilter(e.target.value)}
-              className="rounded-md"
-            />
-            <Input
-              type="text"
-              placeholder="Filter by Phone Number"
-              value={phoneNumberFilter}
-              onChange={(e) => setPhoneNumberFilter(e.target.value)}
-              className="rounded-md"
-            />
+            <Input type="text" placeholder="Filter by Shop Name" value={shopNameFilter} onChange={(e) => setShopNameFilter(e.target.value)} className="rounded-md"/>
+            <Input type="text" placeholder="Filter by Client Name" value={clientNameFilter} onChange={(e) => setClientNameFilter(e.target.value)} className="rounded-md"/>
+            <Input type="text" placeholder="Filter by Phone Number" value={phoneNumberFilter} onChange={(e) => setPhoneNumberFilter(e.target.value)} className="rounded-md"/>
           </div>
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientDetails' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow or fails, these are the primary areas to investigate.
+                Loading clients... For optimal performance, ensure a descending index exists on 'createdAt' in your 'ClientDetails' Firestore collection.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
                 {filteredClients.map((client) => (
-                  <li
-                    key={client.id}
-                    className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
-                  >
+                  <li key={client.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
                     <div className="mb-3 md:mb-0 md:flex-1">
                       <p className="font-semibold text-lg">{client.clientName}</p>
                       <p className="text-sm text-muted-foreground">Shop: {client.shopName}</p>
                       <p className="text-sm text-muted-foreground">Phone: {client.phoneNumber}</p>
                       <p className="text-sm text-muted-foreground">Address: {client.address}</p>
                     </div>
-                    <Button
-                      onClick={() => handleViewClientDetails(client)}
-                      className="mt-2 md:mt-0"
-                      size="sm"
-                      variant="outline"
-                    >
+                    <Button onClick={() => handleViewClientDetails(client)} className="mt-2 md:mt-0" size="sm" variant="outline">
                       <Eye className="mr-2 h-4 w-4" /> View Details
                     </Button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took long, please check Firestore indexes for 'ClientDetails' on the 'createdAt' field.</p>
+              <p className="text-muted-foreground text-center">No clients found. Slow loading? Check Firestore indexes for 'ClientDetails' on 'createdAt' (descending).</p>
             )}
           </ScrollArea>
         </CardContent>

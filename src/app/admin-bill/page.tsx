@@ -1,10 +1,10 @@
 'use client';
 
 import type { ChangeEvent } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { useRouter } from 'next/navigation';
 import { collection, getDocs, query, orderBy, Timestamp, DocumentData, limit } from 'firebase/firestore'; 
-import { format, isValid, parseISO } from 'date-fns'; 
+import { format, parseISO, isValid } from 'date-fns'; 
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -68,11 +68,10 @@ function AdminBillContent() {
   const debouncedDateFilter = useDebounce(dateFilter, 300);
 
 
-   const fetchReceipts = async () => {
+   const fetchReceipts = useCallback(async () => { // Wrapped in useCallback
      setLoading(true);
      try {
        const receiptsRef = collection(db, 'AdminReceipts');
-       // Added limit(50) for performance
        const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
        const querySnapshot = await getDocs(q);
        const fetchedReceipts: AdminReceipt[] = [];
@@ -98,66 +97,45 @@ function AdminBillContent() {
        toast({ 
          variant: "destructive", 
          title: "Error fetching receipts", 
-         description: "Could not load admin receipts. This query sorts by 'createdAt'. Ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages." 
+         description: "Could not load admin receipts. Ensure Firestore indexes are set for 'AdminReceipts' on 'createdAt' (descending). Check console." 
         });
      } finally {
        setLoading(false);
      }
-   };
+   }, [toast]); // Added toast to dependency array
 
 
   useEffect(() => {
     fetchReceipts();
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, [fetchReceipts]); // Use fetchReceipts in dependency array
 
   useEffect(() => {
     let currentReceipts = [...receipts];
-
     if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
         receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
-
     if (debouncedDateFilter && isValid(debouncedDateFilter)) {
        const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
             let givenDateStr = null;
             if (receipt.given?.date && typeof receipt.given.date === 'string') {
-                try {
-                    const parsedDate = parseISO(receipt.given.date);
-                    if (isValid(parsedDate)) {
-                        givenDateStr = format(parsedDate, 'yyyy-MM-dd');
-                    }
-                } catch (e) { console.warn('Invalid given date format:', receipt.given.date); }
+                try { const parsedDate = parseISO(receipt.given.date); if (isValid(parsedDate)) givenDateStr = format(parsedDate, 'yyyy-MM-dd'); } catch (e) { /* ignore */ }
             }
             if (givenDateStr === filterDateStr) return true;
-
             let receivedDateStr = null;
             if (receipt.received?.date && typeof receipt.received.date === 'string') {
-                 try {
-                     const parsedDate = parseISO(receipt.received.date);
-                     if (isValid(parsedDate)) {
-                         receivedDateStr = format(parsedDate, 'yyyy-MM-dd');
-                     }
-                 } catch (e) { console.warn('Invalid received date format:', receipt.received.date); }
+                 try { const parsedDate = parseISO(receipt.received.date); if (isValid(parsedDate)) receivedDateStr = format(parsedDate, 'yyyy-MM-dd'); } catch (e) { /* ignore */ }
             }
             if (receivedDateStr === filterDateStr) return true;
-
-            // Also check createdAt and updatedAt if they are relevant for filtering by a single date
-            // This depends on what the user means by "Date" filter for an admin receipt
             const createdAtDate = receipt.createdAt?.toDate();
             if (createdAtDate && isValid(createdAtDate) && format(createdAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
-
             const updatedAtDate = receipt.updatedAt?.toDate();
             if (updatedAtDate && isValid(updatedAtDate) && format(updatedAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
-
-
             return false; 
         });
     }
-
     setFilteredReceipts(currentReceipts);
   }, [debouncedClientName, debouncedDateFilter, receipts]); 
 
@@ -183,88 +161,46 @@ function AdminBillContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Admin Bill - View Receipts</CardTitle>
-          <CardDescription>View and manage admin receipts.</CardDescription>
+          <CardDescription>View and manage admin receipts. Slow loading? Check Firestore indexes for 'AdminReceipts'.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <Input
-              type="text"
-              placeholder="Filter by Client Name"
-              value={clientNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} 
-              className="rounded-md"
-            />
+            <Input type="text" placeholder="Filter by Client Name" value={clientNameFilter} onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} className="rounded-md"/>
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  variant={'outline'}
-                  className={cn(
-                    'w-full md:w-[240px] justify-start text-left font-normal',
-                    !dateFilter && 'text-muted-foreground'
-                  )}
-                >
+                <Button variant={'outline'} className={cn('w-full md:w-[240px] justify-start text-left font-normal', !dateFilter && 'text-muted-foreground')}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dateFilter ? format(dateFilter, 'PPP') : <span>Filter by Date</span>}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dateFilter}
-                  onSelect={setDateFilter} 
-                  initialFocus
-                />
+                <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus/>
               </PopoverContent>
             </Popover>
           </div>
-
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading admin receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp type and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow or fails, these are the primary areas to investigate. Check browser console for specific errors.
+                Loading admin receipts... For optimal performance, ensure a descending index exists on 'createdAt' in your 'AdminReceipts' Firestore collection.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
                   const statusVariant = getStatusVariant(receipt.status);
                   const displayDate = receipt.updatedAt?.toDate() ?? receipt.createdAt?.toDate();
-
                   return (
-                    <li
-                      key={receipt.id}
-                      className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
-                    >
+                    <li key={receipt.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
                       <div className="mb-3 md:mb-0 md:flex-1">
-                        <p className="font-semibold text-lg">
-                          {receipt.clientName}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          ID: {receipt.id}
-                        </p>
-                         {displayDate && (
-                           <p className="text-sm text-muted-foreground">
-                             Last Updated: {format(displayDate, 'PPP p')}
-                           </p>
-                         )}
+                        <p className="font-semibold text-lg">{receipt.clientName}</p>
+                        <p className="text-sm text-muted-foreground">ID: {receipt.id}</p>
+                         {displayDate && (<p className="text-sm text-muted-foreground">Last Updated: {format(displayDate, 'PPP p')}</p>)}
                       </div>
                        <div className="flex items-center gap-3 md:gap-4 mt-2 md:mt-0">
-                         <Badge variant={statusVariant} className="text-xs capitalize"> 
-                           {receipt.status}
-                         </Badge>
-                         <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewReceipt(receipt.id)}
-                            className="flex items-center gap-1"
-                          >
+                         <Badge variant={statusVariant} className="text-xs capitalize">{receipt.status}</Badge>
+                         <Button variant="outline" size="sm" onClick={() => handleViewReceipt(receipt.id)} className="flex items-center gap-1">
                             <Eye className="h-4 w-4" /> View
                          </Button>
-                         <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditReceipt(receipt)}
-                            className="flex items-center gap-1"
-                          >
+                         <Button variant="outline" size="sm" onClick={() => handleEditReceipt(receipt)} className="flex items-center gap-1">
                            <Edit className="h-4 w-4" /> Edit
                          </Button>
                       </div>
@@ -273,7 +209,7 @@ function AdminBillContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No admin receipts found matching your criteria. If loading took a long time, please verify Firestore indexes for 'AdminReceipts' on the 'createdAt' field (descending).</p>
+              <p className="text-muted-foreground text-center">No admin receipts found. Slow loading? Check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending).</p>
             )}
           </ScrollArea>
         </CardContent>

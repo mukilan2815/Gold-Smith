@@ -30,9 +30,8 @@ interface Client {
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: any; // Keep for ordering
+  createdAt?: any;
 }
-
 
 export default function ReceiptPage() {
   return (
@@ -59,7 +58,6 @@ function ReceiptContent() {
     setLoading(true);
     try {
       const clientsRef = collection(db, 'ClientDetails');
-      // Added limit(50) for performance
       const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50));
       const querySnapshot = await getDocs(q);
       const fetchedClients: Client[] = [];
@@ -72,7 +70,7 @@ function ReceiptContent() {
       toast({ 
         variant: "destructive", 
         title: "Error fetching clients", 
-        description: "Could not load clients. This query sorts by 'createdAt'. Ensure all 'ClientDetails' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console. Check console for specific Firestore error messages." 
+        description: "Could not load clients. Ensure Firestore indexes are set up for 'ClientDetails' on 'createdAt' (descending). Check console for specific errors." 
       });
     } finally {
       setLoading(false);
@@ -83,33 +81,23 @@ function ReceiptContent() {
     fetchClients();
   }, [fetchClients]);
 
-
   const filteredClients = useMemo(() => {
     let currentClients = [...clients];
-
     if (debouncedShopName.trim() !== '') {
-       currentClients = currentClients.filter((client) =>
-         client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
-       );
+       currentClients = currentClients.filter((client) => client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase()));
     }
     if (debouncedClientName.trim() !== '') {
-        currentClients = currentClients.filter((client) =>
-          client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase())
-        );
+        currentClients = currentClients.filter((client) => client.clientName?.toLowerCase().includes(debouncedClientName.toLowerCase()));
     }
-     if (debouncedPhoneNumber.trim() !== '') {
-       currentClients = currentClients.filter((client) =>
-         client.phoneNumber?.includes(debouncedPhoneNumber)
-       );
-     }
+    if (debouncedPhoneNumber.trim() !== '') {
+       currentClients = currentClients.filter((client) => client.phoneNumber?.includes(debouncedPhoneNumber));
+    }
     return currentClients;
   }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, clients]);
-
 
   const handleClientSelection = (client: Client) => {
     router.push(`/receipt/details?clientId=${client.id}&clientName=${encodeURIComponent(client.clientName)}`);
   };
-
 
   const handleDeleteClient = async (clientToDelete: Client) => {
      try {
@@ -123,71 +111,36 @@ function ReceiptContent() {
      }
    };
 
-
   return (
     <div className="flex flex-col items-center justify-start min-h-screen bg-secondary p-4 md:p-8">
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Select Client</CardTitle>
-           <CardDescription>Filter and select a client to create or view their receipt.</CardDescription>
+           <CardDescription>Filter and select a client to create or view their receipt. Slow loading? Check Firestore indexes for 'ClientDetails'.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              type="text"
-              placeholder="Filter by Shop Name"
-              value={shopNameFilter}
-              onChange={(e) => setShopNameFilter(e.target.value)}
-              className="rounded-md"
-            />
-            <Input
-              type="text"
-              placeholder="Filter by Client Name"
-              value={clientNameFilter}
-              onChange={(e) => setClientNameFilter(e.target.value)}
-              className="rounded-md"
-            />
-            <Input
-              type="text"
-              placeholder="Filter by Phone Number"
-              value={phoneNumberFilter}
-              onChange={(e) => setPhoneNumberFilter(e.target.value)}
-              className="rounded-md"
-            />
+            <Input type="text" placeholder="Filter by Shop Name" value={shopNameFilter} onChange={(e) => setShopNameFilter(e.target.value)} className="rounded-md"/>
+            <Input type="text" placeholder="Filter by Client Name" value={clientNameFilter} onChange={(e) => setClientNameFilter(e.target.value)} className="rounded-md"/>
+            <Input type="text" placeholder="Filter by Phone Number" value={phoneNumberFilter} onChange={(e) => setPhoneNumberFilter(e.target.value)} className="rounded-md"/>
           </div>
-
            <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientDetails' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow or fails, these are the primary areas to investigate. Check browser console for specific errors.
+                Loading clients... For optimal performance, ensure a descending index exists on 'createdAt' in your 'ClientDetails' Firestore collection.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
                 {filteredClients.map((client) => (
-                  <li
-                    key={client.id}
-                    className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
-                  >
+                  <li key={client.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
                     <div className="mb-3 md:mb-0 md:flex-1">
-                      <p className="font-semibold text-lg">
-                        {client.clientName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Shop: {client.shopName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Phone: {client.phoneNumber}
-                      </p>
-                       <p className="text-sm text-muted-foreground">
-                         Address: {client.address}
-                       </p>
+                      <p className="font-semibold text-lg">{client.clientName}</p>
+                      <p className="text-sm text-muted-foreground">Shop: {client.shopName}</p>
+                      <p className="text-sm text-muted-foreground">Phone: {client.phoneNumber}</p>
+                      <p className="text-sm text-muted-foreground">Address: {client.address}</p>
                     </div>
                      <div className="flex flex-col md:flex-row gap-2 mt-2 md:mt-0">
-                       <Button
-                         onClick={() => handleClientSelection(client)}
-                         className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground rounded-md"
-                         size="sm"
-                       >
+                       <Button onClick={() => handleClientSelection(client)} className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground rounded-md" size="sm">
                          Select Client
                        </Button>
                        <AlertDialog>
@@ -196,20 +149,12 @@ function ReceiptContent() {
                          </AlertDialogTrigger>
                          <AlertDialogContent>
                            <AlertDialogHeader>
-                             <AlertDialogTitle>
-                               Are you absolutely sure?
-                             </AlertDialogTitle>
-                             <AlertDialogDescription>
-                               This action cannot be undone. This will delete
-                               the client permanently from the database.
-                             </AlertDialogDescription>
+                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                             <AlertDialogDescription>This action cannot be undone. This will delete the client permanently.</AlertDialogDescription>
                            </AlertDialogHeader>
                            <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                             <AlertDialogAction
-                                onClick={() => handleDeleteClient(client)}
-                                className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
-                             >
+                             <AlertDialogAction onClick={() => handleDeleteClient(client)} className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}>
                                Continue
                              </AlertDialogAction>
                            </AlertDialogFooter>
@@ -220,7 +165,7 @@ function ReceiptContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took a long time, please verify Firestore indexes for 'ClientDetails' on the 'createdAt' field (descending).</p>
+              <p className="text-muted-foreground text-center">No clients found. Slow loading? Check Firestore indexes for 'ClientDetails' on 'createdAt' (descending).</p>
             )}
           </ScrollArea>
         </CardContent>
