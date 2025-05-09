@@ -1,6 +1,7 @@
 'use client';
 
-import {useState, useEffect, ChangeEvent, useCallback} from 'react'; // Added ChangeEvent
+import type { ChangeEvent} from 'react'; // Added ChangeEvent
+import {useState, useEffect, useCallback} from 'react'; 
 import {useRouter} from 'next/navigation';
 import {
   collection,
@@ -12,12 +13,12 @@ import {
   doc,
   Timestamp,
   limit,
-} from 'firebase/firestore'; // Added Timestamp, deleteDoc, doc, limit
-import {format, parseISO, isValid, startOfDay, endOfDay} from 'date-fns'; // Added isValid, startOfDay, endOfDay
-import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react'; // Added Trash2, Eye
+} from 'firebase/firestore'; 
+import {format, parseISO, isValid, startOfDay, endOfDay} from 'date-fns'; 
+import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react'; 
 
 import Layout from '@/components/Layout';
-import {Button, buttonVariants} from '@/components/ui/button'; // Added buttonVariants
+import {Button, buttonVariants} from '@/components/ui/button'; 
 import {Input} from '@/components/ui/input';
 import {
   Card,
@@ -25,8 +26,8 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-} from '@/components/ui/card'; // Added CardDescription
-import {ScrollArea} from '@/components/ui/scroll-area'; // Added ScrollArea
+} from '@/components/ui/card'; 
+import {ScrollArea} from '@/components/ui/scroll-area'; 
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {Calendar} from '@/components/ui/calendar';
 import {
@@ -42,7 +43,7 @@ import {
 import {cn} from '@/lib/utils';
 import {db} from '@/lib/firebase';
 import {useToast} from '@/hooks/use-toast';
-import {useDebounce} from '@/hooks/use-debounce'; // Import useDebounce
+import {useDebounce} from '@/hooks/use-debounce';
 
 // Interface matching the ClientReceipts structure in Firestore
 interface ClientReceipt {
@@ -59,7 +60,7 @@ interface ClientReceipt {
     netWt: number;
     finalWt: number;
     stoneAmt: number;
-    stoneWt?: number; // Make stoneWt optional as it might not exist in older docs
+    stoneWt?: number; 
   };
   createdAt?: Timestamp; // Firestore Timestamp
 }
@@ -83,42 +84,37 @@ function BillContent() {
   const router = useRouter();
   const {toast} = useToast();
 
-  // Debounce filter inputs
-  const debouncedShopName = useDebounce(shopNameFilter, 300); // 300ms delay
+  const debouncedShopName = useDebounce(shopNameFilter, 300); 
   const debouncedClientName = useDebounce(clientNameFilter, 300);
   const debouncedPhoneNumber = useDebounce(phoneNumberFilter, 300);
-  const debouncedDateFilter = useDebounce(dateFilter, 300); // Debounce date changes too
+  const debouncedDateFilter = useDebounce(dateFilter, 300); 
 
-  // --- Fetch Receipts from Firestore ---
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
     try {
-      const receiptsRef = collection(db, 'ClientReceipts'); // Fetch from ClientReceipts
-      // Order by creation date, newest first, and limit
-      const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
+      const receiptsRef = collection(db, 'ClientReceipts'); 
+      const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
       const querySnapshot = await getDocs(q);
       const fetchedReceipts: ClientReceipt[] = [];
       querySnapshot.forEach(doc => {
         const data = doc.data();
-        // Ensure issueDate is handled correctly, even if stored differently (e.g., Timestamp)
         let issueDateStr = '';
         if (data.issueDate) {
           if (data.issueDate instanceof Timestamp) {
             issueDateStr = data.issueDate.toDate().toISOString();
           } else if (typeof data.issueDate === 'string') {
-            // Attempt to parse string dates, assuming ISO format primarily
             try {
               issueDateStr = parseISO(data.issueDate).toISOString();
             } catch (e) {
               console.warn(`Could not parse date string: ${data.issueDate}`);
-              issueDateStr = ''; // Or handle as invalid
+              issueDateStr = ''; 
             }
           }
         }
         fetchedReceipts.push({
           id: doc.id,
           ...data,
-          issueDate: issueDateStr, // Ensure issueDate is stored as ISO string in state
+          issueDate: issueDateStr, 
         } as ClientReceipt);
       });
       setReceipts(fetchedReceipts);
@@ -126,8 +122,8 @@ function BillContent() {
       console.error('Error fetching client receipts:', error);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Could not load receipts.',
+        title: 'Error fetching receipts',
+        description: "Could not load receipts. This query sorts by 'createdAt'. Ensure all 'ClientReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console.",
       });
     } finally {
       setLoading(false);
@@ -136,44 +132,37 @@ function BillContent() {
 
   useEffect(() => {
     fetchReceipts();
-  }, [fetchReceipts]); // Fetch only on mount
+  }, [fetchReceipts]); 
 
-  // --- Filter Logic (now using debounced values) ---
   useEffect(() => {
     if (!receipts) return;
 
-    // Start with the full list of receipts
     let currentReceipts = [...receipts];
 
-    // Filter by Shop Name
     if (debouncedShopName.trim() !== '') {
       currentReceipts = currentReceipts.filter(receipt =>
         receipt.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase())
       );
     }
 
-    // Filter by Client Name
     if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter(receipt =>
         receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
 
-    // Filter by Phone Number
     if (debouncedPhoneNumber.trim() !== '') {
       currentReceipts = currentReceipts.filter(receipt =>
         receipt.phoneNumber?.includes(debouncedPhoneNumber)
       );
     }
 
-    // Filter by Issue Date
     if (debouncedDateFilter && isValid(debouncedDateFilter)) {
       const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
       currentReceipts = currentReceipts.filter(receipt => {
-        // Check if issueDate exists and is a valid ISO string before parsing
         if (!receipt.issueDate || typeof receipt.issueDate !== 'string') return false;
         try {
-          const issueDate = parseISO(receipt.issueDate); // Parse the ISO string
+          const issueDate = parseISO(receipt.issueDate); 
           return isValid(issueDate) && format(issueDate, 'yyyy-MM-dd') === filterDateStr;
         } catch (e) {
           console.warn(`Invalid date format for receipt ${receipt.id}: ${receipt.issueDate}`);
@@ -189,11 +178,9 @@ function BillContent() {
     debouncedPhoneNumber,
     debouncedDateFilter,
     receipts,
-  ]); // Rerun when debounced filters or base receipts change
+  ]); 
 
-  // --- Navigation Handlers ---
   const handleViewReceipt = (receipt: ClientReceipt) => {
-    // Navigate to the details page, passing the Firestore receipt ID
     router.push(
       `/receipt/details?clientId=${receipt.clientId}&clientName=${encodeURIComponent(
         receipt.clientName
@@ -203,12 +190,9 @@ function BillContent() {
 
   const handleDeleteReceipt = async (receiptToDelete: ClientReceipt) => {
     try {
-      const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); // Reference by ID
+      const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id); 
       await deleteDoc(receiptRef);
-      // Remove the deleted receipt from the local state immediately
       setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id));
-      // Optionally refetch if there's a chance of external changes, but removing locally is faster for UI feedback
-      // await fetchReceipts();
       toast({title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.`});
     } catch (error) {
       console.error('Error deleting receipt:', error);
@@ -224,7 +208,6 @@ function BillContent() {
           <CardDescription>View and manage client receipts.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {/* Filter Inputs */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <Input
               type="text"
@@ -232,7 +215,7 @@ function BillContent() {
               value={shopNameFilter}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 setShopNameFilter(e.target.value)
-              } // Update immediate state
+              } 
               className="rounded-md"
             />
             <Input
@@ -241,16 +224,16 @@ function BillContent() {
               value={clientNameFilter}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 setClientNameFilter(e.target.value)
-              } // Update immediate state
+              } 
               className="rounded-md"
             />
             <Input
-              type="text" // Keep as text for flexibility
+              type="text" 
               placeholder="Filter by Phone Number"
               value={phoneNumberFilter}
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 setPhoneNumberFilter(e.target.value)
-              } // Update immediate state
+              } 
               className="rounded-md"
             />
             <Popover>
@@ -258,7 +241,7 @@ function BillContent() {
                 <Button
                   variant={'outline'}
                   className={cn(
-                    'w-full md:w-[240px] justify-start text-left font-normal', // Adjusted width
+                    'w-full md:w-[240px] justify-start text-left font-normal', 
                     !dateFilter && 'text-muted-foreground'
                   )}
                 >
@@ -270,17 +253,18 @@ function BillContent() {
                 <Calendar
                   mode="single"
                   selected={dateFilter}
-                  onSelect={setDateFilter} // Update immediate state
+                  onSelect={setDateFilter} 
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Receipt List */}
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
-              <p className="text-muted-foreground text-center">Loading receipts...</p>
+              <p className="text-muted-foreground text-center">
+                Loading receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientReceipts' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+              </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map(receipt => {
@@ -305,7 +289,7 @@ function BillContent() {
 
                   return (
                     <li
-                      key={receipt.id} // Use Firestore document ID as key
+                      key={receipt.id} 
                       className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors"
                     >
                       <div className="mb-3 md:mb-0 md:flex-1">
@@ -328,7 +312,7 @@ function BillContent() {
                       </div>
                       <div className="flex items-center gap-2 mt-2 md:mt-0">
                         {' '}
-                        {/* Button container */}
+                        
                         <Button
                           variant="outline"
                           size="sm"
@@ -359,7 +343,7 @@ function BillContent() {
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => handleDeleteReceipt(receipt)}
-                                className={cn(buttonVariants({variant: 'destructive'}))} // Style delete button
+                                className={cn(buttonVariants({variant: 'destructive'}))} 
                               >
                                 Delete
                               </AlertDialogAction>
@@ -373,7 +357,7 @@ function BillContent() {
               </ul>
             ) : (
               <p className="text-muted-foreground text-center">
-                No receipts found matching your criteria.
+                No receipts found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.
               </p>
             )}
           </ScrollArea>

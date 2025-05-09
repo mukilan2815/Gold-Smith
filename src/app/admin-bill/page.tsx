@@ -1,11 +1,10 @@
-
 'use client';
 
 import type { ChangeEvent } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData, limit } from 'firebase/firestore'; // Added DocumentData, limit
-import { format, isValid, parseISO, startOfDay, endOfDay } from 'date-fns'; // Added startOfDay, endOfDay
+import { collection, getDocs, query, orderBy, where, Timestamp, DocumentData, limit } from 'firebase/firestore'; 
+import { format, isValid, parseISO, startOfDay, endOfDay } from 'date-fns'; 
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
 import Layout from '@/components/Layout';
@@ -19,9 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
-import { useDebounce } from '@/hooks/use-debounce'; // Import useDebounce
+import { useDebounce } from '@/hooks/use-debounce'; 
 
-// Interface matching the NEW AdminReceipts structure in Firestore
 interface GivenData {
     date: string | null;
     items: any[];
@@ -39,7 +37,7 @@ interface ReceivedData {
 }
 
 interface AdminReceipt {
-  id: string; // Firestore document ID
+  id: string; 
   clientId: string;
   clientName: string;
   given: GivenData | null;
@@ -66,24 +64,19 @@ function AdminBillContent() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Debounce filter inputs
-  const debouncedClientName = useDebounce(clientNameFilter, 300); // 300ms delay
+  const debouncedClientName = useDebounce(clientNameFilter, 300); 
   const debouncedDateFilter = useDebounce(dateFilter, 300);
 
 
-   // --- Fetch Receipts from Firestore ---
    const fetchReceipts = async () => {
      setLoading(true);
      try {
        const receiptsRef = collection(db, 'AdminReceipts');
-       // Order by creation time and limit initial fetch
-       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); // Limit to 50
+       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
        const querySnapshot = await getDocs(q);
        const fetchedReceipts: AdminReceipt[] = [];
        querySnapshot.forEach((doc) => {
-          // Ensure data matches the AdminReceipt interface, provide defaults if needed
-         const data = doc.data() as DocumentData; // Use DocumentData initially
-         // Ensure dates are parsed correctly if stored as strings
+         const data = doc.data() as DocumentData; 
          const givenDateStr = data.given?.date;
          const receivedDateStr = data.received?.date;
 
@@ -91,19 +84,17 @@ function AdminBillContent() {
            id: doc.id,
            clientId: data.clientId || '',
            clientName: data.clientName || 'Unknown Client',
-           given: { ...data.given, date: givenDateStr } || null, // Keep date as string from Firestore
-           received: { ...data.received, date: receivedDateStr } || null, // Keep date as string from Firestore
+           given: { ...data.given, date: givenDateStr } || null, 
+           received: { ...data.received, date: receivedDateStr } || null, 
            status: data.status || 'empty',
-           createdAt: data.createdAt || Timestamp.now(), // Provide default timestamp
-           updatedAt: data.updatedAt || Timestamp.now(), // Provide default timestamp
-         } as AdminReceipt); // Cast to AdminReceipt
+           createdAt: data.createdAt || Timestamp.now(), 
+           updatedAt: data.updatedAt || Timestamp.now(), 
+         } as AdminReceipt); 
        });
        setReceipts(fetchedReceipts);
-       // Filter initial data
-       // filterReceipts(fetchedReceipts, debouncedClientName, debouncedDateFilter);
      } catch (error) {
        console.error("Error fetching admin receipts:", error);
-       toast({ variant: "destructive", title: "Error", description: "Could not load receipts." });
+       toast({ variant: "destructive", title: "Error fetching receipts", description: "Could not load admin receipts. This query sorts by 'createdAt'. Ensure all 'AdminReceipts' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console." });
      } finally {
        setLoading(false);
      }
@@ -112,25 +103,20 @@ function AdminBillContent() {
 
   useEffect(() => {
     fetchReceipts();
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Fetch only on mount
+  }, []); 
 
-  // --- Filter Logic (now uses debounced values) ---
   useEffect(() => {
     let currentReceipts = [...receipts];
 
-    // Filter by Client Name
     if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
         receipt.clientName.toLowerCase().includes(debouncedClientName.toLowerCase())
       );
     }
 
-    // Filter by Date
     if (debouncedDateFilter && isValid(debouncedDateFilter)) {
        const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
-            // Check given date
             let givenDateStr = null;
             if (receipt.given?.date && typeof receipt.given.date === 'string') {
                 try {
@@ -142,7 +128,6 @@ function AdminBillContent() {
             }
             if (givenDateStr === filterDateStr) return true;
 
-            // Check received date
             let receivedDateStr = null;
             if (receipt.received?.date && typeof receipt.received.date === 'string') {
                  try {
@@ -154,30 +139,27 @@ function AdminBillContent() {
             }
             if (receivedDateStr === filterDateStr) return true;
 
-            return false; // No match
+            return false; 
         });
     }
 
     setFilteredReceipts(currentReceipts);
-  }, [debouncedClientName, debouncedDateFilter, receipts]); // Rerun filter when debounced filters or base receipts change
+  }, [debouncedClientName, debouncedDateFilter, receipts]); 
 
-   // --- Determine Receipt Status Variant for Badge ---
    const getStatusVariant = (status: 'complete' | 'incomplete' | 'empty'): 'default' | 'secondary' | 'destructive' | 'outline' => {
      switch (status) {
-       case 'complete': return 'default'; // Green/Success or primary color
-       case 'incomplete': return 'secondary'; // Yellow/Warning or secondary color
-       case 'empty': return 'destructive'; // Red/Error
+       case 'complete': return 'default'; 
+       case 'incomplete': return 'secondary'; 
+       case 'empty': return 'destructive'; 
        default: return 'outline';
      }
    };
 
-  // --- Navigation Handlers ---
   const handleViewReceipt = (receiptId: string) => {
     router.push(`/admin-bill/view?receiptId=${receiptId}`);
   };
 
   const handleEditReceipt = (receipt: AdminReceipt) => {
-    // Navigate to the details page with client info and receipt ID for editing
     router.push(`/admin-receipt/details?clientId=${receipt.clientId}&clientName=${encodeURIComponent(receipt.clientName)}&receiptId=${receipt.id}`);
   };
 
@@ -189,13 +171,12 @@ function AdminBillContent() {
           <CardDescription>View and manage admin receipts.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {/* Filter Inputs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <Input
               type="text"
               placeholder="Filter by Client Name"
               value={clientNameFilter}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} // Update immediate state
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setClientNameFilter(e.target.value)} 
               className="rounded-md"
             />
             <Popover>
@@ -215,22 +196,22 @@ function AdminBillContent() {
                 <Calendar
                   mode="single"
                   selected={dateFilter}
-                  onSelect={setDateFilter} // Update immediate state
+                  onSelect={setDateFilter} 
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
           </div>
 
-          {/* Receipt List */}
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
-              <p className="text-muted-foreground text-center">Loading receipts...</p>
+              <p className="text-muted-foreground text-center">
+                Loading admin receipts... This query sorts by 'createdAt'. For optimal performance, ensure all 'AdminReceipts' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+              </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
                   const statusVariant = getStatusVariant(receipt.status);
-                  // Use updatedAt first, then createdAt for display date
                   const displayDate = receipt.updatedAt?.toDate() ?? receipt.createdAt?.toDate();
 
                   return (
@@ -252,7 +233,7 @@ function AdminBillContent() {
                          )}
                       </div>
                        <div className="flex items-center gap-3 md:gap-4 mt-2 md:mt-0">
-                         <Badge variant={statusVariant} className="text-xs capitalize"> {/* Capitalize status text */}
+                         <Badge variant={statusVariant} className="text-xs capitalize"> 
                            {receipt.status}
                          </Badge>
                          <Button
@@ -277,7 +258,7 @@ function AdminBillContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No receipts found matching your criteria.</p>
+              <p className="text-muted-foreground text-center">No admin receipts found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.</p>
             )}
           </ScrollArea>
         </CardContent>

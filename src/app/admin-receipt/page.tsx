@@ -1,8 +1,7 @@
-
 'use client';
 
 import Layout from '@/components/Layout';
-import { useState, useEffect, useMemo, useCallback } from 'react'; // Added useMemo, useCallback
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +46,6 @@ function AdminReceiptContent() {
      setLoading(true);
      try {
        const clientsRef = collection(db, 'ClientDetails');
-       // Ensure you have a composite index in Firestore for orderBy('createdAt', 'desc')
        const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50));
        const querySnapshot = await getDocs(q);
        const fetchedClients: Client[] = [];
@@ -57,12 +55,11 @@ function AdminReceiptContent() {
        setClients(fetchedClients);
      } catch (error) {
        console.error("Error fetching clients from Firestore:", error);
-       toast({ variant: "destructive", title: "Error", description: "Could not load clients. Ensure Firestore indexes are set up for optimal performance." });
+       toast({ variant: "destructive", title: "Error fetching clients", description: "Could not load clients. This query sorts by 'createdAt'. Ensure all 'ClientDetails' documents have this field as a Firestore Timestamp and a descending index exists on 'createdAt' in your Firestore console." });
      } finally {
        setLoading(false);
      }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [toast]); // toast is a stable function from useToast
+   }, [toast]); 
 
   useEffect(() => {
     fetchClients();
@@ -128,7 +125,9 @@ function AdminReceiptContent() {
 
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
-              <p className="text-muted-foreground text-center">Loading clients... This may take time if Firestore indexes are not configured.</p>
+              <p className="text-muted-foreground text-center">
+                Loading clients... This query sorts by 'createdAt'. For optimal performance, ensure all 'ClientDetails' documents have a 'createdAt' field (Firestore Timestamp type) and that a descending index exists on 'createdAt' in your Firestore console. If loading is slow, these are the primary areas to investigate.
+              </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
                 {filteredClients.map((client) => (
@@ -161,7 +160,7 @@ function AdminReceiptContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took long, please check Firestore indexes.</p>
+              <p className="text-muted-foreground text-center">No clients found matching your criteria. If loading took long, please check Firestore indexes and data consistency for the 'createdAt' field.</p>
             )}
           </ScrollArea>
         </CardContent>
