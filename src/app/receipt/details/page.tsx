@@ -69,8 +69,8 @@ interface ClientReceiptData {
     finalWt: number;
     stoneAmt: number;
   };
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: Timestamp; // Firestore Timestamp
+  updatedAt?: Timestamp; // Firestore Timestamp
 }
 
 export default function ReceiptDetailsPage() {
@@ -133,7 +133,8 @@ function ReceiptDetailsContent() {
     setWeightUnit('');
     setItems([{sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''}]);
     setInitialState(null);
-    setIsEditMode(true); // Ensure new receipts start in edit mode
+    setIsEditMode(true); 
+    setExistingReceiptId(null);
   }, []);
 
   const fetchReceipt = useCallback(async () => {
@@ -147,6 +148,7 @@ function ReceiptDetailsContent() {
           const data = docSnap.data() as ClientReceiptData;
           const loadedDate = data.issueDate && isValid(parseISO(data.issueDate)) ? parseISO(data.issueDate) : undefined;
           const loadedMetal = data.metalType || '';
+          // Overall weight and unit are not part of the new ClientReceipts structure per earlier request, so initialize them as empty
           const loadedWeight = ''; 
           const loadedWeightUnit = ''; 
 
@@ -205,17 +207,26 @@ function ReceiptDetailsContent() {
   useEffect(() => {
     if (receiptIdParam) { 
       setExistingReceiptId(receiptIdParam); 
-      fetchReceipt();
+      // fetchReceipt will be called by the change in existingReceiptId if it's different
     } else { 
       resetToNewReceiptState();
       setIsLoading(false); 
     }
+  }, [receiptIdParam, resetToNewReceiptState]); 
+
+  useEffect(() => {
+    // This effect runs when existingReceiptId changes, or initially if receiptIdParam was present.
+    if (existingReceiptId) {
+      fetchReceipt();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [receiptIdParam, fetchReceipt, resetToNewReceiptState]); 
+  }, [existingReceiptId]); // Only depend on existingReceiptId for fetching
 
 
   const handleAddItem = () => {
-    if (!isEditMode) return;
+    if (!isEditMode && !existingReceiptId) setIsEditMode(true); // If new receipt and not in edit mode, switch to edit mode
+    else if (!isEditMode && existingReceiptId) return; // If viewing existing and not in edit mode, do nothing
+
     setItems(prevItems => [
       ...prevItems,
       {sNo: prevItems.length + 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''},
@@ -236,7 +247,9 @@ function ReceiptDetailsContent() {
 
 
   const handleInputChange = (index: number, field: keyof ReceiptItem, value: any) => {
-    if (!isEditMode) return;
+    if (!isEditMode && !existingReceiptId) setIsEditMode(true);
+    else if (!isEditMode && existingReceiptId) return;
+
 
     setItems(prevItems => {
       const newItems = [...prevItems];
@@ -330,7 +343,7 @@ function ReceiptDetailsContent() {
     const totalFinalWt = validItems.reduce((acc, item) => acc + (parseFloat(item.finalWt) || 0), 0);
     const totalStoneAmt = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneAmt) || 0), 0);
 
-    const receiptData: Omit<ClientReceiptData, 'createdAt' | 'updatedAt'> = {
+    const receiptData: Omit<ClientReceiptData, 'createdAt' | 'updatedAt' | 'clientId' | 'clientName'> & {clientId: string; clientName: string} = {
       clientId: clientIdParam,
       clientName: clientNameParam, 
       shopName: clientShopName,
@@ -358,12 +371,14 @@ function ReceiptDetailsContent() {
 
     try {
       if (existingReceiptId) {
+        // @ts-ignore
         await updateDoc(doc(db, 'ClientReceipts', existingReceiptId), {
           ...receiptData,
           updatedAt: serverTimestamp(),
         });
         toast({id: toastId, title: 'Receipt Updated!', description: 'The receipt has been saved successfully.'});
       } else {
+        // @ts-ignore
         const newReceiptRef = await addDoc(collection(db, 'ClientReceipts'), {
           ...receiptData,
           createdAt: serverTimestamp(),
@@ -560,7 +575,7 @@ function ReceiptDetailsContent() {
 
   return (
     <Layout>
-      <div className="flex flex-col justify-start min-h-screen bg-secondary py-4 md:py-8 px-1 md:px-2">
+      <div className="flex flex-col justify-start min-h-screen bg-secondary py-2 px-0 md:py-4">
         <Card className="w-full max-w-none"> 
           <CardHeader className="space-y-1 p-3"> 
             <div className="flex flex-wrap justify-between items-center gap-2">
@@ -580,12 +595,12 @@ function ReceiptDetailsContent() {
                       <Download className="mr-2 h-4 w-4" /> Download Receipt
                     </Button>
                   </>
-                ) : isEditMode ? ( 
+                ) : isEditMode || !existingReceiptId ? ( // Show save/create if in edit mode OR if it's a new receipt 
                   <>
                     <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
                       <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (existingReceiptId ? 'Save Changes' : 'Create Receipt')}
                     </Button>
-                    {existingReceiptId && ( 
+                    {existingReceiptId && isEditMode && ( // Only show cancel if editing an existing receipt
                        <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving} size="sm">
                          <XCircle className="mr-2 h-4 w-4" /> Cancel Edit
                        </Button>
@@ -608,24 +623,24 @@ function ReceiptDetailsContent() {
                       'w-full justify-start text-left font-normal', 
                       !date && 'text-muted-foreground'
                     )}
-                    disabled={!isEditMode} 
+                    disabled={!isEditMode && !!existingReceiptId} // Disabled if viewing existing and not in edit mode
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {date ? format(date, 'PPP') : <span>Pick Issue Date</span>}
                   </Button>
                 </PopoverTrigger>
-                {isEditMode && ( 
+                {(isEditMode || !existingReceiptId) && ( 
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
                   </PopoverContent>
                 )}
               </Popover>
 
-              <Select onValueChange={setMetal} value={metal} disabled={!isEditMode}>
+              <Select onValueChange={setMetal} value={metal} disabled={!isEditMode && !!existingReceiptId}>
                 <SelectTrigger className="w-full"> 
                   <SelectValue placeholder="Select Metal Type" />
                 </SelectTrigger>
-                {isEditMode && ( 
+                {(isEditMode || !existingReceiptId) && ( 
                   <SelectContent>
                     <SelectItem value="Gold">Gold</SelectItem>
                     <SelectItem value="Silver">Silver</SelectItem>
@@ -640,15 +655,15 @@ function ReceiptDetailsContent() {
                   placeholder="Overall Weight (Optional)"
                   value={weight}
                   onChange={e => setWeight(e.target.value)}
-                  disabled={!isEditMode} 
+                  disabled={!isEditMode && !!existingReceiptId}
                   className="flex-1 text-sm h-9"
                   step="0.001"
                 />
-                <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode}>
+                <Select onValueChange={setWeightUnit} value={weightUnit} disabled={!isEditMode && !!existingReceiptId}>
                   <SelectTrigger className="w-[100px] h-9"> 
                     <SelectValue placeholder="Unit" />
                   </SelectTrigger>
-                  {isEditMode && ( 
+                  {(isEditMode || !existingReceiptId) && ( 
                     <SelectContent>
                       <SelectItem value="mg">mg</SelectItem>
                       <SelectItem value="g">g</SelectItem>
@@ -663,16 +678,16 @@ function ReceiptDetailsContent() {
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
               <table className="w-full border border-collapse border-border">
                 <colgroup>
-                    <col style={{ width: '4%' }} />  
-                    <col style={{ width: '18%' }} /> 
-                    <col style={{ width: '7%' }} />  
-                    <col style={{ width: '13%' }} /> 
-                    <col style={{ width: '13%' }} /> 
-                    <col style={{ width: '10%' }} /> 
-                    <col style={{ width: '8%' }} /> 
-                    <col style={{ width: '10%' }} /> 
-                    <col style={{ width: '13%' }} /> 
-                    <col style={{ width: '4%' }} />   
+                    <col style={{ width: '3%' }} />  {/* S.No. */}
+                    <col style={{ width: '32%' }} /> {/* Item Name */}
+                    <col style={{ width: '5%' }} />  {/* Tag */}
+                    <col style={{ width: '10%' }} /> {/* Gross (wt) */}
+                    <col style={{ width: '10%' }} /> {/* Stone (wt) */}
+                    <col style={{ width: '9%' }} />  {/* Net (wt) - Readonly */}
+                    <col style={{ width: '8%' }} />  {/* M/T (%) */}
+                    <col style={{ width: '9%' }} />  {/* Final (wt) - Readonly */}
+                    <col style={{ width: '10%' }} /> {/* Stone Amt */}
+                    <col style={{ width: '4%' }} />   {/* Action */}
                 </colgroup>
                 <thead>
                   <tr className="bg-muted">
@@ -697,7 +712,7 @@ function ReceiptDetailsContent() {
                           type="text"
                           value={item.itemName}
                           onChange={e => handleInputChange(index, 'itemName', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 w-full"
                           placeholder="Item name"
                         />
@@ -707,7 +722,7 @@ function ReceiptDetailsContent() {
                           type="text"
                           value={item.tag}
                           onChange={e => handleInputChange(index, 'tag', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 w-full"
                           placeholder="Tag"
                         />
@@ -717,7 +732,7 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.grossWt}
                           onChange={e => handleInputChange(index, 'grossWt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
@@ -728,7 +743,7 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.stoneWt}
                           onChange={e => handleInputChange(index, 'stoneWt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 text-right w-full"
                           step="0.001"
                           placeholder="0.000"
@@ -742,7 +757,7 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.meltingTouch}
                           onChange={e => handleInputChange(index, 'meltingTouch', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 text-right w-full"
                           step="0.01"
                           placeholder="0.00"
@@ -756,19 +771,19 @@ function ReceiptDetailsContent() {
                           type="number"
                           value={item.stoneAmt}
                           onChange={e => handleInputChange(index, 'stoneAmt', e.target.value)}
-                          disabled={!isEditMode}
+                          disabled={!isEditMode && !!existingReceiptId}
                           className="text-sm h-9 text-right w-full"
                           step="0.01"
                           placeholder="0.00"
                         />
                       </td>
                       <td className="p-1 border text-center align-middle">
-                        {isEditMode && (
+                        {(isEditMode || !existingReceiptId) && (
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemoveItem(item.sNo)}
-                            disabled={items.length <= 1 && !isEditMode} 
+                            disabled={items.length <= 1 && (!isEditMode && !!existingReceiptId)} 
                             className="text-destructive hover:text-destructive/80 h-8 w-8"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -792,7 +807,7 @@ function ReceiptDetailsContent() {
                   </tr>
                 </tbody>
               </table>
-              {isEditMode && (
+              {(isEditMode || !existingReceiptId) && (
                 <Button onClick={handleAddItem} variant="outline" size="sm" className="mt-3">
                   <PlusCircle className="mr-2 h-4 w-4" /> Add Item Row
                 </Button>
@@ -804,4 +819,3 @@ function ReceiptDetailsContent() {
     </Layout>
   );
 }
-
