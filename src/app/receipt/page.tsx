@@ -18,19 +18,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-// import { collection, getDocs, query, orderBy, doc, deleteDoc, limit, Timestamp } from 'firebase/firestore'; // Firebase removed
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 
 interface Client {
-  id: string;
+  id: string; // This will likely be MongoDB's _id as a string
   shopName: string;
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: Date; // Changed from Timestamp
+  createdAt?: Date; 
 }
 
 export default function ClientReceiptSelectPage() {
@@ -56,16 +54,16 @@ function ClientReceiptSelectContent() {
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement SQL data fetching for clients
-    // Example: const fetchedClients = await fetchClientsFromSQL();
-    // setClients(fetchedClients);
-    console.warn("Client data fetching not implemented. Waiting for SQL database setup.");
+    // TODO: Implement MongoDB data fetching for clients
+    // Example: const fetchedClients = await fetchClientsFromMongoDB({filters}); // Pass filters if needed
+    // setClients(fetchedClients.map(c => ({...c, id: c._id.toString()})));
+    console.warn("Client data fetching not implemented. Waiting for MongoDB setup.");
     toast({
         title: "Data Fetching Pending",
-        description: "Client list for receipts will be loaded once the SQL database is configured.",
+        description: "Client list for receipts will be loaded once MongoDB is configured.",
         variant: "default"
     });
-    setClients([]); // Initialize with empty array
+    setClients([]); 
     setLoading(false);
   }, [toast]);
 
@@ -74,6 +72,8 @@ function ClientReceiptSelectContent() {
   }, [fetchClients]);
 
   const filteredClients = useMemo(() => {
+    // Filtering will likely happen server-side with MongoDB for efficiency.
+    // This client-side filter can be a fallback or for initial display if all clients are fetched.
     let currentClients = [...clients];
     if (debouncedShopName.trim() !== '') {
        currentClients = currentClients.filter((client) => client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase()));
@@ -92,13 +92,13 @@ function ClientReceiptSelectContent() {
   };
 
   const handleDeleteClient = async (clientToDelete: Client) => {
-     // TODO: Implement SQL data deletion for client
-     // Example: await deleteClientFromSQL(clientToDelete.id);
+     // TODO: Implement MongoDB data deletion for client
+     // Example: await deleteClientFromMongoDB(clientToDelete.id);
      // setClients((prevClients) => prevClients.filter(c => c.id !== clientToDelete.id));
-     console.warn(`Delete operation for client ID ${clientToDelete.id} not implemented. Waiting for SQL database setup.`);
+     console.warn(`Delete operation for client ID ${clientToDelete.id} not implemented. Waiting for MongoDB setup.`);
      toast({
          title: "Delete Operation Pending",
-         description: `Client ${clientToDelete.clientName} will be deleted once SQL DB is configured.`,
+         description: `Client ${clientToDelete.clientName} will be deleted once MongoDB is configured. This may also delete associated receipts.`,
          variant: "default"
      });
    };
@@ -108,7 +108,7 @@ function ClientReceiptSelectContent() {
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Client Receipt - Select Client</CardTitle>
-           <CardDescription>Filter and select a client. Client data will be loaded from SQL database once configured.</CardDescription>
+           <CardDescription>Filter and select a client. Client data will be loaded from MongoDB once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -119,7 +119,7 @@ function ClientReceiptSelectContent() {
            <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... Please wait for SQL database configuration.
+                Loading clients... Please wait for MongoDB configuration.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
@@ -142,7 +142,7 @@ function ClientReceiptSelectContent() {
                          <AlertDialogContent>
                            <AlertDialogHeader>
                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                             <AlertDialogDescription>This action cannot be undone. This will permanently delete the client. This is a critical operation.</AlertDialogDescription>
+                             <AlertDialogDescription>This action cannot be undone. This will permanently delete the client and all associated receipts. This is a critical operation.</AlertDialogDescription>
                            </AlertDialogHeader>
                            <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -157,7 +157,7 @@ function ClientReceiptSelectContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found. Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">No clients found. Waiting for MongoDB configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

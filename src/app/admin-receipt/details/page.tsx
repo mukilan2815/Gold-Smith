@@ -15,10 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-// import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp, Timestamp, DocumentData } from 'firebase/firestore'; // Firebase removed
-// import { db } from '@/lib/firebase'; // Firebase removed
 
-// Keep UI-specific item structure
+// UI-specific item structure
 interface GivenItemUI {
   id: string; 
   productName: string;
@@ -38,49 +36,50 @@ interface ReceivedItemUI {
   total: number; 
 }
 
-// Keep Firestore data structure for eventual mapping from/to SQL
-interface GivenItemFirestore {
+// Structure for items stored in MongoDB (within AdminReceipts)
+interface GivenItemMongo {
   productName: string;
-  pureWeight: string;
+  pureWeight: string; // Store as string, parse to float for calculations
   purePercent: string;
   melting: string;
-  total: number;
+  total: number; // Calculated, store as number
 }
 
-interface ReceivedItemFirestore {
+interface ReceivedItemMongo {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
   makingChargePercent: string;
-  subTotal: number;
-  total: number;
+  subTotal: number; // Calculated
+  total: number; // Calculated
 }
 
-
-interface GivenData {
-    date: string | null; 
-    items: GivenItemFirestore[];
+interface GivenDataMongo {
+    date: Date | null; // Store as Date in MongoDB
+    items: GivenItemMongo[];
     totalPureWeight: number;
     total: number;
 }
 
-interface ReceivedData {
-    date: string | null; 
-    items: ReceivedItemFirestore[];
+interface ReceivedDataMongo {
+    date: Date | null; // Store as Date in MongoDB
+    items: ReceivedItemMongo[];
     totalOrnamentsWt: number;
     totalStoneWeight: number;
     totalSubTotal: number;
     total: number;
 }
 
+// AdminReceiptData structure for MongoDB
 interface AdminReceiptData {
+  _id?: string; // MongoDB ObjectId as string
   clientId: string;
-  clientName: string;
-  given: GivenData | null;
-  received: ReceivedData | null;
+  clientName: string; // Denormalized
+  given: GivenDataMongo | null;
+  received: ReceivedDataMongo | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Date; // Changed from Timestamp
-  updatedAt: Date; // Changed from Timestamp
+  createdAt: Date; 
+  updatedAt: Date; 
 }
 
 const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -123,7 +122,7 @@ function AdminReceiptDetailsContent() {
 
   const clientId = searchParams.get('clientId');
   const clientName = searchParams.get('clientName') || 'Client';
-  const receiptIdParam = searchParams.get('receiptId');
+  const receiptIdParam = searchParams.get('receiptId'); // This will be MongoDB _id
 
   const [dateGiven, setDateGiven] = useState<Date | undefined>(undefined);
   const [dateReceived, setDateReceived] = useState<Date | undefined>(undefined);
@@ -160,16 +159,25 @@ function AdminReceiptDetailsContent() {
       if (receiptIdParam) { 
         setLoading(true);
         setCurrentReceiptId(receiptIdParam);
-        // TODO: Implement SQL data fetching for existing receipt
-        // Example: const data = await fetchAdminReceiptFromSQL(receiptIdParam);
-        // if (data) { ... map data to state ... } else { resetFormForNewReceipt(); }
-        console.warn(`Data fetching for receipt ID ${receiptIdParam} not implemented. Waiting for SQL database setup.`);
+        // TODO: Implement MongoDB data fetching for existing AdminReceipt
+        // Example: const data = await fetchAdminReceiptFromMongoDB(receiptIdParam);
+        // if (data) { 
+        //    setDateGiven(data.given?.date ? new Date(data.given.date) : undefined);
+        //    setGivenItems(data.given?.items.map(item => ({ id: generateId(), ...item })) || [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+        //    setDateReceived(data.received?.date ? new Date(data.received.date) : undefined);
+        //    setReceivedItems(data.received?.items.map(item => ({ id: generateId(), ...item, subTotal: calculateReceivedSubTotal(item as any), total: calculateReceivedTotal(item as any) })) || [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+        //    // Set manual totals if needed from loaded data, though they are not stored.
+        // } else { 
+        //    toast({variant: "destructive", title: "Not Found", description: `Admin receipt ${receiptIdParam} not found.`});
+        //    resetFormForNewReceipt(); 
+        // }
+        console.warn(`Data fetching for admin receipt ID ${receiptIdParam} not implemented. Waiting for MongoDB setup.`);
         toast({
             title: "Data Fetching Pending",
-            description: `Admin receipt details for ${receiptIdParam} will be loaded once SQL DB is configured. Starting new for now.`,
+            description: `Admin receipt details for ${receiptIdParam} will be loaded once MongoDB is configured.`,
             variant: "default"
         });
-        resetFormForNewReceipt(); // Default to new if fetching fails or not implemented
+        // resetFormForNewReceipt(); // Default to new if fetching fails or not implemented
         setLoading(false);
       } else { 
           resetFormForNewReceipt();
@@ -232,12 +240,17 @@ function AdminReceiptDetailsContent() {
       return;
     }
 
-    const finalGivenItemsToSave: GivenItemFirestore[] = givenItems
+    const finalGivenItemsToSave: GivenItemMongo[] = givenItems
        .filter(item => item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== '')
-       .map(({ id, ...rest }) => rest);
-    const finalReceivedItemsToSave: ReceivedItemFirestore[] = receivedItems
+       .map(({ id, ...rest }) => ({...rest, total: parseFloat(rest.total.toFixed(3))})); // Ensure total is number
+       
+    const finalReceivedItemsToSave: ReceivedItemMongo[] = receivedItems
        .filter(item => item.productName.trim() !== '' || item.finalOrnamentsWt.trim() !== '' || item.stoneWeight.trim() !== '' || item.makingChargePercent.trim() !== '')
-       .map(({ id, ...rest }) => rest);
+       .map(({ id, subTotal, total, ...rest }) => ({
+           ...rest,
+           subTotal: parseFloat(subTotal.toFixed(3)),
+           total: parseFloat(total.toFixed(3))
+        }));
 
     let hasGivenDataForSave = finalGivenItemsToSave.length > 0;
     let hasReceivedDataForSave = finalReceivedItemsToSave.length > 0;
@@ -260,39 +273,86 @@ function AdminReceiptDetailsContent() {
     }
 
     setIsSaving(true);
-    // TODO: Implement SQL data saving/updating here
-    // This logic will be significantly different for SQL.
-    // You'll need to interact with your SQL database client (e.g., Prisma).
-    // 1. Check if a receipt exists for this client and potentially date.
-    // 2. If exists, update. If not, insert.
-    // 3. Handle 'given' and 'received' data updates based on `saveType`.
-    // 4. Update `status` accordingly.
+    
+    let dataToSave: Partial<AdminReceiptData> = {
+      clientId,
+      clientName,
+    };
 
-    console.warn(`Save operation for type "${saveType}" not implemented. Waiting for SQL database setup.`);
+    let existingData: AdminReceiptData | null = null;
+    if (currentReceiptId) {
+      // TODO: Fetch existing document from MongoDB to merge data if needed.
+      // existingData = await fetchAdminReceiptFromMongoDB(currentReceiptId);
+      console.warn(`Fetching existing admin receipt ${currentReceiptId} for merge not implemented. Waiting for MongoDB setup.`);
+    }
+    
+    if (saveType === 'given' && hasGivenDataForSave) {
+        dataToSave.given = {
+            date: dateGiven!,
+            items: finalGivenItemsToSave,
+            totalPureWeight: validUiGivenItems.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0),
+            total: validUiGivenItems.reduce((sum, item) => sum + item.total, 0),
+        };
+        if(existingData?.received) dataToSave.received = existingData.received; // Preserve existing received data
+    } else if (saveType === 'given' && !hasGivenDataForSave) {
+        dataToSave.given = null; // Clear given if saving empty given
+        if(existingData?.received) dataToSave.received = existingData.received;
+    }
+
+
+    if (saveType === 'received' && hasReceivedDataForSave) {
+        dataToSave.received = {
+            date: dateReceived!,
+            items: finalReceivedItemsToSave,
+            totalOrnamentsWt: validUiReceivedItems.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0),
+            totalStoneWeight: validUiReceivedItems.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0),
+            totalSubTotal: validUiReceivedItems.reduce((sum, item) => sum + item.subTotal, 0),
+            total: validUiReceivedItems.reduce((sum, item) => sum + item.total, 0),
+        };
+         if(existingData?.given) dataToSave.given = existingData.given; // Preserve existing given data
+    } else if (saveType === 'received' && !hasReceivedDataForSave) {
+        dataToSave.received = null; // Clear received if saving empty received
+        if(existingData?.given) dataToSave.given = existingData.given;
+    }
+    
+    const finalGivenData = dataToSave.given || existingData?.given;
+    const finalReceivedData = dataToSave.received || existingData?.received;
+
+    if (finalGivenData && finalReceivedData) {
+      dataToSave.status = 'complete';
+    } else if (finalGivenData || finalReceivedData) {
+      dataToSave.status = 'incomplete';
+    } else {
+      dataToSave.status = 'empty';
+    }
+
+    dataToSave.updatedAt = new Date();
+
+    // TODO: Implement MongoDB save/update logic
+    // if (currentReceiptId) {
+    //   await updateAdminReceiptInMongoDB(currentReceiptId, dataToSave);
+    // } else {
+    //   dataToSave.createdAt = new Date();
+    //   const newReceipt = await createAdminReceiptInMongoDB(dataToSave as AdminReceiptData);
+    //   setCurrentReceiptId(newReceipt._id.toString());
+    //   router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${newReceipt._id.toString()}`, { scroll: false });
+    // }
+    console.warn(`Save operation for admin receipt type "${saveType}" not implemented. Waiting for MongoDB setup.`);
     toast({
         title: "Save Operation Pending",
-        description: `Admin receipt ${saveType} data for ${clientName} will be saved once SQL DB is configured.`,
+        description: `Admin receipt ${saveType} data for ${clientName} will be saved/updated once MongoDB is configured. Status: ${dataToSave.status}`,
         variant: "default"
     });
     
-    // Simulating a save for UI update, actual save needs SQL.
+    // Simulate save for UI update
     let tempCurrentReceiptId = currentReceiptId;
     if (!tempCurrentReceiptId) {
-        tempCurrentReceiptId = `temp_sql_id_${Date.now()}`; // Placeholder
+        tempCurrentReceiptId = `temp_mongo_id_${Date.now()}`; // Placeholder
         setCurrentReceiptId(tempCurrentReceiptId);
         router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${tempCurrentReceiptId}`, { scroll: false });
     }
     
-    // Determine status based on current UI state (for simulation)
-    let finalStatus: 'complete' | 'incomplete' | 'empty';
-    const hasFinalGiven = saveType === 'given' ? hasGivenDataForSave : (givenItems.filter(i => i.productName).length > 0);
-    const hasFinalReceived = saveType === 'received' ? hasReceivedDataForSave : (receivedItems.filter(i => i.productName).length > 0);
-
-    if (hasFinalGiven && hasFinalReceived) finalStatus = 'complete';
-    else if (hasFinalGiven || hasFinalReceived) finalStatus = 'incomplete';
-    else finalStatus = 'empty';
-
-    toast({ title: 'Simulated Save', description: `Admin receipt ${saveType} data for ${clientName}. Status: ${finalStatus}. (SQL Save Pending)` });
+    toast({ title: 'Simulated Save', description: `Admin receipt ${saveType} data for ${clientName}. Status: ${dataToSave.status}. (MongoDB Save Pending)` });
     setIsSaving(false);
   };
 
@@ -324,7 +384,7 @@ function AdminReceiptDetailsContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
-          <p>Loading admin receipt details... Waiting for SQL database configuration.</p>
+          <p>Loading admin receipt details... Waiting for MongoDB configuration.</p>
         </div>
       </Layout>
     );
@@ -336,7 +396,7 @@ function AdminReceiptDetailsContent() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Admin Receipt for: {clientName}</CardTitle>
-            <CardDescription>Manage given and received items. Data will be saved to SQL database once configured.</CardDescription>
+            <CardDescription>Manage given and received items. Data will be saved to MongoDB once configured.</CardDescription>
             {currentReceiptId && <p className="text-xs text-muted-foreground">Receipt ID: {currentReceiptId}</p>}
           </CardHeader>
           <CardContent>

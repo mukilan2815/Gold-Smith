@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-// import { collection, getDocs, query, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,11 +10,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { ArrowLeft } from 'lucide-react';
 
-// Keep interfaces for data structure, will be mapped from SQL later
-interface GivenItemFirestore {
+// Structures to align with MongoDB AdminReceipts collection
+interface GivenItemMongo {
   productName: string;
   pureWeight: string;
   purePercent: string;
@@ -23,25 +21,25 @@ interface GivenItemFirestore {
   total: number;
 }
 
-interface ReceivedItemFirestore {
+interface ReceivedItemMongo {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  makingChargePercent: string;
+  makingChargePercent: string; // Or makingCharge
   subTotal: number;
   total: number;
 }
 
-interface GivenData {
-  date: string | null; 
-  items: GivenItemFirestore[];
+interface GivenDataMongo {
+  date: Date | null; 
+  items: GivenItemMongo[];
   totalPureWeight: number;
   total: number;
 }
 
-interface ReceivedData {
-  date: string | null; 
-  items: ReceivedItemFirestore[];
+interface ReceivedDataMongo {
+  date: Date | null; 
+  items: ReceivedItemMongo[];
   totalOrnamentsWt: number;
   totalStoneWeight: number;
   totalSubTotal: number;
@@ -49,14 +47,14 @@ interface ReceivedData {
 }
 
 interface AdminReceipt {
-  id: string;
+  id: string; // Corresponds to _id from MongoDB
   clientId: string;
   clientName: string;
-  given: GivenData | null;
-  received: ReceivedData | null;
+  given: GivenDataMongo | null;
+  received: ReceivedDataMongo | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Date; // Changed from Timestamp
-  updatedAt: Date; // Changed from Timestamp
+  createdAt: Date; 
+  updatedAt: Date; 
 }
 
 const getDisplayValue = (value: string | number | undefined | null, decimals = 3): string => {
@@ -81,16 +79,16 @@ function AdminDetailsListContent() {
 
   const fetchAdminReceipts = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement SQL data fetching here
-    // Example: const fetchedReceipts = await fetchAllAdminReceiptsFromSQL();
-    // setReceipts(fetchedReceipts);
-    console.warn("Data fetching not implemented. Waiting for SQL database setup.");
+    // TODO: Implement MongoDB data fetching for all AdminReceipts
+    // Example: const fetchedReceipts = await fetchAllAdminReceiptsFromMongoDB();
+    // setReceipts(fetchedReceipts.map(r => ({...r, id: r._id.toString()})));
+    console.warn("Admin receipts fetching not implemented. Waiting for MongoDB setup.");
     toast({
         title: "Data Fetching Pending",
-        description: "Admin receipt details will be loaded once the SQL database is configured.",
+        description: "Admin receipt details will be loaded once MongoDB is configured.",
         variant: "default"
     });
-    setReceipts([]); // Initialize with empty array
+    setReceipts([]); 
     setLoading(false);
   }, [toast]);
 
@@ -117,22 +115,22 @@ function AdminDetailsListContent() {
           </Button>
         </CardHeader>
         <CardDescription className="px-6 pb-4">
-            This page displays details of all admin receipts. Data will be loaded from the SQL database once configured.
+            This page displays details of all admin receipts. Data will be loaded from MongoDB once configured.
         </CardDescription>
       </Card>
 
       {loading ? (
         <div className="text-center py-10">
-          <p className="text-muted-foreground">Loading admin receipts... Please wait for SQL database configuration.</p>
+          <p className="text-muted-foreground">Loading admin receipts... Please wait for MongoDB configuration.</p>
         </div>
       ) : receipts.length > 0 ? (
         <ScrollArea className="h-[calc(100vh-220px)]">
           <div className="space-y-6">
             {receipts.map((receipt) => {
-                const formattedDateGiven = receipt.given?.date && isValid(parseISO(receipt.given.date))
-                ? format(parseISO(receipt.given.date), 'PPP') : 'N/A';
-                const formattedDateReceived = receipt.received?.date && isValid(parseISO(receipt.received.date))
-                ? format(parseISO(receipt.received.date), 'PPP') : 'N/A';
+                const formattedDateGiven = receipt.given?.date && isValid(new Date(receipt.given.date))
+                ? format(new Date(receipt.given.date), 'PPP') : 'N/A';
+                const formattedDateReceived = receipt.received?.date && isValid(new Date(receipt.received.date))
+                ? format(new Date(receipt.received.date), 'PPP') : 'N/A';
 
                 return (
               <Card key={receipt.id} className="overflow-hidden">
@@ -140,7 +138,7 @@ function AdminDetailsListContent() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle className="text-lg">{receipt.clientName}</CardTitle>
-                      <CardDescription>Receipt ID: {receipt.id.substring(0,10)}...<br />Last Updated: {format(receipt.updatedAt, 'PPP p')}</CardDescription>
+                      <CardDescription>Receipt ID: {receipt.id.substring(0,10)}...<br />Last Updated: {format(new Date(receipt.updatedAt), 'PPP p')}</CardDescription>
                     </div>
                     <Badge variant={getStatusVariant(receipt.status)} className="capitalize">{receipt.status}</Badge>
                   </div>
@@ -233,7 +231,7 @@ function AdminDetailsListContent() {
           </div>
         </ScrollArea>
       ) : (
-        <p className="text-muted-foreground text-center py-10">No admin receipts found. Waiting for SQL database configuration.</p>
+        <p className="text-muted-foreground text-center py-10">No admin receipts found. Waiting for MongoDB configuration.</p>
       )}
     </div>
   );

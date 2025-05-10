@@ -7,19 +7,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-// import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore'; // Firebase removed
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Eye } from 'lucide-react';
 
 interface Client {
-  id: string;
+  id: string; // MongoDB _id as string
   shopName: string;
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: Date; // Changed from Timestamp
+  createdAt?: Date; 
 }
 
 export default function CustomerDetailsListPage() {
@@ -45,16 +43,16 @@ function CustomerDetailsListContent() {
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement SQL data fetching for clients
-    // Example: const fetchedClients = await fetchClientsFromSQL();
-    // setClients(fetchedClients);
-    console.warn("Client data fetching not implemented. Waiting for SQL database setup.");
+    // TODO: Implement MongoDB data fetching for clients
+    // Example: const fetchedClients = await fetchClientsFromMongoDB({ filters });
+    // setClients(fetchedClients.map(c => ({...c, id: c._id.toString()})));
+    console.warn("Client data fetching not implemented. Waiting for MongoDB setup.");
     toast({
         title: "Data Fetching Pending",
-        description: "Client list for customer details will be loaded once the SQL database is configured.",
+        description: "Client list for customer details will be loaded once MongoDB is configured.",
         variant: "default"
     });
-    setClients([]); // Initialize with empty array
+    setClients([]); 
     setLoading(false);
   }, [toast]);
 
@@ -63,6 +61,7 @@ function CustomerDetailsListContent() {
   }, [fetchClients]);
 
   const filteredClients = useMemo(() => {
+    // Client-side filtering as fallback, server-side preferred with MongoDB
     let currentClients = [...clients];
     if (debouncedShopName.trim() !== '') {
       currentClients = currentClients.filter((client) => client.shopName?.toLowerCase().includes(debouncedShopName.toLowerCase()));
@@ -85,7 +84,7 @@ function CustomerDetailsListContent() {
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Customer Details - Select Client</CardTitle>
-          <CardDescription>Filter and select a client to view their details and receipts. Data will be loaded from SQL database once configured.</CardDescription>
+          <CardDescription>Filter and select a client to view their details and receipts. Data will be loaded from MongoDB once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -96,7 +95,7 @@ function CustomerDetailsListContent() {
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... Please wait for SQL database configuration.
+                Loading clients... Please wait for MongoDB configuration.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
@@ -115,7 +114,7 @@ function CustomerDetailsListContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found. Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">No clients found. Waiting for MongoDB configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

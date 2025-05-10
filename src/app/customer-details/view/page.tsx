@@ -2,31 +2,29 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-// import { doc, getDoc, collection, query, where, getDocs, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { ArrowLeft, Eye } from 'lucide-react';
 
 interface Client {
-  id: string;
+  id: string; // MongoDB _id as string
   shopName: string;
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: Date; // Changed from Timestamp
+  createdAt?: Date; 
 }
 
 interface ClientReceipt {
-  id: string;
+  id: string; // MongoDB _id as string
   clientId: string;
   clientName: string; 
   metalType: string;
-  issueDate: string; 
+  issueDate: string; // Or Date, needs consistent handling
   totals: {
     grossWt: number;
     netWt: number;
@@ -34,7 +32,7 @@ interface ClientReceipt {
     stoneAmt: number;
     stoneWt?: number;
   };
-  createdAt?: Date; // Changed from Timestamp
+  createdAt?: Date;
 }
 
 export default function ViewCustomerDetailsPage() {
@@ -64,16 +62,16 @@ function ViewCustomerDetailsContent() {
       return;
     }
     setLoadingClient(true);
-    // TODO: Implement SQL data fetching for client details
-    // Example: const clientData = await fetchClientFromSQL(clientId);
-    // if (clientData) setClient(clientData); else router.push('/customer-details');
-    console.warn(`Client details fetching for ID ${clientId} not implemented. Waiting for SQL database setup.`);
+    // TODO: Implement MongoDB data fetching for client details
+    // Example: const clientData = await fetchClientFromMongoDB(clientId);
+    // if (clientData) setClient({...clientData, id: clientData._id.toString()}); else { toast({...}); router.push('/customer-details');}
+    console.warn(`Client details fetching for ID ${clientId} not implemented. Waiting for MongoDB setup.`);
     toast({
         title: "Data Fetching Pending",
-        description: `Client details for ${clientId} will be loaded once SQL DB is configured.`,
+        description: `Client details for ${clientId} will be loaded once MongoDB is configured.`,
         variant: "default"
     });
-    setClient(null); // Initialize with null
+    setClient(null); 
     setLoadingClient(false);
   }, [clientId, router, toast]);
 
@@ -83,16 +81,16 @@ function ViewCustomerDetailsContent() {
       return;
     }
     setLoadingReceipts(true);
-    // TODO: Implement SQL data fetching for client's receipts
-    // Example: const fetchedReceipts = await fetchReceiptsForClientFromSQL(clientId);
-    // setReceipts(fetchedReceipts);
-     console.warn(`Client receipts fetching for client ID ${clientId} not implemented. Waiting for SQL database setup.`);
+    // TODO: Implement MongoDB data fetching for client's receipts
+    // Example: const fetchedReceipts = await fetchReceiptsForClientFromMongoDB(clientId);
+    // setReceipts(fetchedReceipts.map(r => ({...r, id: r._id.toString(), issueDate: new Date(r.issueDate).toISOString() })));
+     console.warn(`Client receipts fetching for client ID ${clientId} not implemented. Waiting for MongoDB setup.`);
     toast({
         title: "Data Fetching Pending",
-        description: `Receipts for client ${clientId} will be loaded once SQL DB is configured.`,
+        description: `Receipts for client ${clientId} will be loaded once MongoDB is configured.`,
         variant: "default"
     });
-    setReceipts([]); // Initialize with empty array
+    setReceipts([]); 
     setLoadingReceipts(false);
   }, [clientId, toast]);
 
@@ -107,7 +105,7 @@ function ViewCustomerDetailsContent() {
 
   if (loadingClient) {
     return (
-      <Layout><div className="flex justify-center items-center min-h-screen p-4"><p>Loading client details... Waiting for SQL database configuration.</p></div></Layout>
+      <Layout><div className="flex justify-center items-center min-h-screen p-4"><p>Loading client details... Waiting for MongoDB configuration.</p></div></Layout>
     );
   }
 
@@ -136,18 +134,18 @@ function ViewCustomerDetailsContent() {
           <CardContent>
             <p><strong>Phone:</strong> {client.phoneNumber || 'N/A'}</p>
             <p><strong>Address:</strong> {client.address || 'N/A'}</p>
-            {client.createdAt && (<p className="text-sm text-muted-foreground">Client Since: {format(client.createdAt, 'PPP')}</p>)}
+            {client.createdAt && (<p className="text-sm text-muted-foreground">Client Since: {format(new Date(client.createdAt), 'PPP')}</p>)}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Client Receipts for {client.clientName}</CardTitle>
-            <CardDescription>Receipts will be loaded from SQL database once configured.</CardDescription>
+            <CardDescription>Receipts will be loaded from MongoDB once configured.</CardDescription>
           </CardHeader>
           <CardContent>
             {loadingReceipts ? (
-              <p className="text-muted-foreground text-center">Loading receipts... Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">Loading receipts... Waiting for MongoDB configuration.</p>
             ) : receipts.length > 0 ? (
               <ScrollArea className="h-[40vh] w-full rounded-md border">
                 <ul className="p-4 space-y-3">
@@ -155,6 +153,8 @@ function ViewCustomerDetailsContent() {
                     let formattedIssueDate = 'N/A';
                     if (receipt.issueDate && isValid(parseISO(receipt.issueDate))) {
                        formattedIssueDate = format(parseISO(receipt.issueDate), 'PPP');
+                    } else if (receipt.issueDate) { // If it's a Date object but not string
+                        try { formattedIssueDate = format(new Date(receipt.issueDate), 'PPP'); } catch (e) {/* ignore */}
                     }
                     return (
                       <li key={receipt.id} className="border rounded-md p-3 flex justify-between items-center bg-card hover:bg-muted/50">
@@ -170,7 +170,7 @@ function ViewCustomerDetailsContent() {
                 </ul>
               </ScrollArea>
             ) : (
-              <p className="text-muted-foreground text-center">No receipts found for this client. Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">No receipts found for this client. Waiting for MongoDB configuration.</p>
             )}
           </CardContent>
         </Card>

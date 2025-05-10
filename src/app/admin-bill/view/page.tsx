@@ -3,7 +3,6 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-// import { doc, getDoc, Timestamp, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, isValid, parseISO } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -12,15 +11,14 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
-// Keep interfaces for data structure, will be mapped from SQL later
-interface GivenItemFirestore {
+// Structure for items stored in MongoDB (within AdminReceipts)
+interface GivenItemMongo {
   productName: string;
   pureWeight: string;
   purePercent: string;
@@ -28,39 +26,41 @@ interface GivenItemFirestore {
   total: number;
 }
 
-interface ReceivedItemFirestore {
+interface ReceivedItemMongo {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  makingChargePercent: string;
+  makingChargePercent: string; // Or makingCharge based on your DB
   subTotal: number;
   total: number;
 }
 
-interface GivenData {
-    date: string | null; 
-    items: GivenItemFirestore[];
+interface GivenDataMongo {
+    date: Date | null; 
+    items: GivenItemMongo[];
     totalPureWeight: number;
     total: number;
 }
 
-interface ReceivedData {
-    date: string | null; 
-    items: ReceivedItemFirestore[];
+interface ReceivedDataMongo {
+    date: Date | null; 
+    items: ReceivedItemMongo[];
     totalOrnamentsWt: number;
     totalStoneWeight: number;
     totalSubTotal: number;
     total: number;
 }
 
+// This AdminReceiptData is for display, should align with MongoDB AdminReceipts collection structure
 interface AdminReceiptData {
+  _id?: string; // MongoDB ObjectId as string
   clientId: string;
   clientName: string;
-  given: GivenData | null;
-  received: ReceivedData | null;
+  given: GivenDataMongo | null;
+  received: ReceivedDataMongo | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Date; // Changed from Timestamp
-  updatedAt: Date; // Changed from Timestamp
+  createdAt: Date; 
+  updatedAt: Date; 
 }
 
 const getDisplayValue = (value: string | number | undefined | null, decimals = 3): string => {
@@ -81,7 +81,7 @@ function AdminBillViewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
-  const receiptId = searchParams.get('receiptId');
+  const receiptId = searchParams.get('receiptId'); // This will be MongoDB _id
 
   const [receiptData, setReceiptData] = useState<AdminReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,23 +100,23 @@ function AdminBillViewContent() {
         return;
       }
       setLoading(true);
-      // TODO: Implement SQL data fetching for the specific receipt
-      // Example: const data = await fetchAdminReceiptFromSQL(receiptId);
+      // TODO: Implement MongoDB data fetching for the specific AdminReceipt
+      // Example: const data = await fetchAdminReceiptFromMongoDB(receiptId);
       // if (data) {
-      //   setReceiptData(data);
+      //   setReceiptData({...data, id: data._id.toString()}); // Map _id to id if needed
       //   setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
       //   setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
       // } else {
       //   toast({ variant: "destructive", title: "Not Found", description: `Admin receipt with ID ${receiptId} not found.` });
       //   router.push('/admin-bill');
       // }
-      console.warn(`Data fetching for receipt ID ${receiptId} not implemented. Waiting for SQL database setup.`);
+      console.warn(`Data fetching for admin receipt ID ${receiptId} not implemented. Waiting for MongoDB setup.`);
       toast({
           title: "Data Fetching Pending",
-          description: `Details for admin receipt ${receiptId} will be loaded once SQL DB is configured.`,
+          description: `Details for admin receipt ${receiptId} will be loaded once MongoDB is configured.`,
           variant: "default"
       });
-      setReceiptData(null); // Initialize with null
+      setReceiptData(null); 
       setLoading(false);
     };
 
@@ -145,8 +145,8 @@ function AdminBillViewContent() {
         }
         const hasGiven = receiptData.given && receiptData.given.items.length > 0;
         const hasReceived = receiptData.received && receiptData.received.items.length > 0;
-        const givenDate = receiptData.given?.date ? parseISO(receiptData.given.date) : null;
-        const receivedDate = receiptData.received?.date ? parseISO(receiptData.received.date) : null;
+        const givenDate = receiptData.given?.date ? new Date(receiptData.given.date) : null;
+        const receivedDate = receiptData.received?.date ? new Date(receiptData.received.date) : null;
 
         if (!hasGiven && !hasReceived) {
              toast({ variant: "destructive", title: "Error", description: "Cannot download an empty admin receipt." });
@@ -186,7 +186,7 @@ function AdminBillViewContent() {
         doc.setTextColor(primaryColor);
         doc.text(`Client Name: ${receiptData.clientName || 'N/A'}`, margin + 5, startY);
         startY += 6;
-        const receiptCreationDate = receiptData.createdAt; // Already a Date object
+        const receiptCreationDate = receiptData.createdAt ? new Date(receiptData.createdAt) : null;
         if (receiptCreationDate && isValid(receiptCreationDate)) {
             doc.text(`Receipt Date: ${format(receiptCreationDate, 'PPP p')}`, margin + 5, startY);
             startY += 6;
@@ -368,7 +368,7 @@ function AdminBillViewContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center min-h-screen">
-          <p>Loading admin receipt view... Waiting for SQL database configuration.</p>
+          <p>Loading admin receipt view... Waiting for MongoDB configuration.</p>
         </div>
       </Layout>
     );
@@ -390,10 +390,10 @@ function AdminBillViewContent() {
   const hasGivenData = receiptData.given && receiptData.given.items.length > 0;
   const hasReceivedData = receiptData.received && receiptData.received.items.length > 0;
 
-  const formattedDateGiven = receiptData.given?.date && isValid(parseISO(receiptData.given.date))
-                              ? format(parseISO(receiptData.given.date), 'PPP') : 'N/A';
-  const formattedDateReceived = receiptData.received?.date && isValid(parseISO(receiptData.received.date))
-                                ? format(parseISO(receiptData.received.date), 'PPP') : 'N/A';
+  const formattedDateGiven = receiptData.given?.date && isValid(new Date(receiptData.given.date))
+                              ? format(new Date(receiptData.given.date), 'PPP') : 'N/A';
+  const formattedDateReceived = receiptData.received?.date && isValid(new Date(receiptData.received.date))
+                                ? format(new Date(receiptData.received.date), 'PPP') : 'N/A';
 
   return (
     <Layout>
@@ -415,7 +415,7 @@ function AdminBillViewContent() {
          </CardHeader>
         </Card>
 
-        {hasGivenData ? (
+        {hasGivenData && receiptData.given ? (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Given Details</CardTitle>
@@ -469,7 +469,7 @@ function AdminBillViewContent() {
 
         {hasGivenData && hasReceivedData && <Separator className="my-6" />}
 
-        {hasReceivedData ? (
+        {hasReceivedData && receiptData.received ? (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>Received Details</CardTitle>
@@ -526,8 +526,8 @@ function AdminBillViewContent() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Total</CardTitle>
-            <CardDescription>Final calculation based on Given and Received totals. This is for on-screen viewing and can be manually adjusted.</CardDescription>
+            <CardTitle>Total Summary</CardTitle>
+            <CardDescription>Final calculation based on Given and Received totals. This is for on-screen viewing and can be manually adjusted. This section is not saved and only for PDF output.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>

@@ -13,8 +13,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {useToast}from '@/hooks/use-toast';
-// import {collection, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Firebase removed
-// import {db}from '@/lib/firebase'; // Firebase removed
 
 export default function NewClientPage() {
   return (
@@ -43,34 +41,37 @@ function NewClientContent() {
     }
 
     setIsSaving(true);
-    const savingToast = toast({
+    const savingToastId = toast({ // Get the ID of the toast
       title: 'Saving Client...',
-      description: 'Please wait. Data will be saved to SQL database once configured.',
-    });
+      description: 'Please wait. Data will be saved to MongoDB once configured.',
+    }).id;
 
-    // TODO: Implement SQL data saving for new client
+
+    // TODO: Implement MongoDB data saving for new client
     // Example: 
     // const newClientData = {
     //   shopName: shopName.trim(),
     //   clientName: clientName.trim(),
     //   phoneNumber: phoneNumber.trim(),
     //   address: address.trim(),
-    //   createdAt: new Date(), // Or handle timestamp in SQL
+    //   createdAt: new Date(), 
     // };
-    // const result = await saveClientToSQL(newClientData);
+    // const result = await saveClientToMongoDB(newClientData);
     // if (result.success) { ... } else { ... }
-
-    console.warn("Client saving not implemented. Waiting for SQL database setup.");
+    console.warn("Client saving not implemented. Waiting for MongoDB setup.");
+    
     // Simulate save for UI update
     setTimeout(() => {
         setShopName('');
         setClientName('');
         setPhoneNumber('');
         setAddress('');
-        toast.update(savingToast.id, { 
-            title: 'Client Data Prepared (SQL Save Pending)!',
-            description: `${clientName.trim()}'s details prepared. Actual save to SQL database pending configuration.`,
-        });
+        if (savingToastId) { // Check if ID exists before updating
+          toast.update(savingToastId, { 
+              title: 'Client Data Prepared (MongoDB Save Pending)!',
+              description: `${clientName.trim()}'s details prepared. Actual save to MongoDB pending configuration.`,
+          });
+        }
         setIsSaving(false);
     }, 1500); // Simulate delay
   };
@@ -80,7 +81,7 @@ function NewClientContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
-          <CardDescription>Enter client details. Data will be saved to SQL database once configured.</CardDescription>
+          <CardDescription>Enter client details. Data will be saved to MongoDB once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">

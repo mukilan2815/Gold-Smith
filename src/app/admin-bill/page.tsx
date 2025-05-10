@@ -3,7 +3,6 @@
 import type { ChangeEvent } from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-// import { collection, getDocs, query, orderBy, Timestamp, DocumentData, limit } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns'; 
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
@@ -16,12 +15,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-// import { db } from '@/lib/firebase'; // Firebase removed
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce'; 
 
-// Keep interfaces for data structure, will be mapped from SQL later
-interface GivenItemFirestore {
+// Structure for items stored in MongoDB (within AdminReceipts)
+interface GivenItemMongo {
   productName: string;
   pureWeight: string;
   purePercent: string;
@@ -29,40 +27,41 @@ interface GivenItemFirestore {
   total: number;
 }
 
-interface ReceivedItemFirestore {
+interface ReceivedItemMongo {
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  makingChargePercent: string;
+  makingChargePercent: string; // Note: In original prompt, it was makingCharge, here it's makingChargePercent
   subTotal: number;
   total: number;
 }
 
-interface GivenData {
-    date: string | null;
-    items: GivenItemFirestore[];
+interface GivenDataMongo {
+    date: Date | null; 
+    items: GivenItemMongo[];
     totalPureWeight: number;
     total: number;
 }
 
-interface ReceivedData {
-    date: string | null;
-    items: ReceivedItemFirestore[];
+interface ReceivedDataMongo {
+    date: Date | null; 
+    items: ReceivedItemMongo[];
     totalOrnamentsWt: number;
     totalStoneWeight: number;
     totalSubTotal: number;
     total: number;
 }
 
+// AdminReceipt structure to align with MongoDB's AdminReceipts collection
 interface AdminReceipt {
-  id: string; 
+  id: string; // Corresponds to _id from MongoDB
   clientId: string;
   clientName: string;
-  given: GivenData | null;
-  received: ReceivedData | null;
+  given: GivenDataMongo | null;
+  received: ReceivedDataMongo | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Date; // Changed from Timestamp
-  updatedAt: Date; // Changed from Timestamp
+  createdAt: Date; 
+  updatedAt: Date; 
 }
 
 export default function AdminBillListPage() {
@@ -88,16 +87,16 @@ function AdminBillListContent() {
 
    const fetchReceipts = useCallback(async () => {
      setLoading(true);
-     // TODO: Implement SQL data fetching here
-     // Example: const fetchedReceipts = await fetchAdminReceiptsFromSQL();
-     // setReceipts(fetchedReceipts);
-     console.warn("Data fetching not implemented. Waiting for SQL database setup.");
+     // TODO: Implement MongoDB data fetching for AdminReceipts
+     // Example: const fetchedReceipts = await fetchAdminReceiptsFromMongoDB({ filters });
+     // setReceipts(fetchedReceipts.map(r => ({...r, id: r._id.toString()})));
+     console.warn("Admin receipts fetching not implemented. Waiting for MongoDB setup.");
      toast({
         title: "Data Fetching Pending",
-        description: "Admin receipts will be loaded once the SQL database is configured.",
+        description: "Admin receipts will be loaded once MongoDB is configured.",
         variant: "default"
      });
-     setReceipts([]); // Initialize with empty array
+     setReceipts([]); 
      setLoading(false);
    }, [toast]);
 
@@ -107,6 +106,7 @@ function AdminBillListContent() {
   }, [fetchReceipts]);
 
   useEffect(() => {
+    // Client-side filtering as fallback, server-side preferred with MongoDB
     let currentReceipts = [...receipts];
     if (debouncedClientName.trim() !== '') {
       currentReceipts = currentReceipts.filter((receipt) =>
@@ -117,22 +117,22 @@ function AdminBillListContent() {
        const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
             let givenDateMatch = false;
-            if (receipt.given?.date && isValid(parseISO(receipt.given.date))) {
-                if (format(parseISO(receipt.given.date), 'yyyy-MM-dd') === filterDateStr) givenDateMatch = true;
+            if (receipt.given?.date && isValid(new Date(receipt.given.date))) { // Ensure date is valid Date object
+                if (format(new Date(receipt.given.date), 'yyyy-MM-dd') === filterDateStr) givenDateMatch = true;
             }
             if (givenDateMatch) return true;
 
             let receivedDateMatch = false;
-            if (receipt.received?.date && isValid(parseISO(receipt.received.date))) {
-                if (format(parseISO(receipt.received.date), 'yyyy-MM-dd') === filterDateStr) receivedDateMatch = true;
+            if (receipt.received?.date && isValid(new Date(receipt.received.date))) {
+                if (format(new Date(receipt.received.date), 'yyyy-MM-dd') === filterDateStr) receivedDateMatch = true;
             }
             if (receivedDateMatch) return true;
             
-            const createdAtDate = receipt.createdAt; // Already a Date object
-            if (createdAtDate && isValid(createdAtDate) && format(createdAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
+            const createdAtDate = receipt.createdAt; 
+            if (createdAtDate && isValid(new Date(createdAtDate)) && format(new Date(createdAtDate), 'yyyy-MM-dd') === filterDateStr) return true;
             
-            const updatedAtDate = receipt.updatedAt; // Already a Date object
-            if (updatedAtDate && isValid(updatedAtDate) && format(updatedAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
+            const updatedAtDate = receipt.updatedAt; 
+            if (updatedAtDate && isValid(new Date(updatedAtDate)) && format(new Date(updatedAtDate), 'yyyy-MM-dd') === filterDateStr) return true;
             
             return false; 
         });
@@ -162,7 +162,7 @@ function AdminBillListContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Admin Bill - View Receipts</CardTitle>
-          <CardDescription>View and manage admin receipts. Data will be loaded from the SQL database once configured.</CardDescription>
+          <CardDescription>View and manage admin receipts. Data will be loaded from MongoDB once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -182,19 +182,19 @@ function AdminBillListContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading admin receipts... Please wait for SQL database configuration.
+                Loading admin receipts... Please wait for MongoDB configuration.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
                   const statusVariant = getStatusVariant(receipt.status);
-                  const displayDate = receipt.updatedAt ?? receipt.createdAt; // Prefer updatedAt
+                  const displayDate = receipt.updatedAt ? new Date(receipt.updatedAt) : (receipt.createdAt ? new Date(receipt.createdAt) : null); // Prefer updatedAt
                   return (
                     <li key={receipt.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
                       <div className="mb-3 md:mb-0 md:flex-1">
                         <p className="font-semibold text-lg">{receipt.clientName}</p>
                         <p className="text-sm text-muted-foreground">ID: {receipt.id.substring(0,10)}...</p>
-                         {displayDate && (<p className="text-sm text-muted-foreground">Last Updated: {format(displayDate, 'PPP p')}</p>)}
+                         {displayDate && isValid(displayDate) && (<p className="text-sm text-muted-foreground">Last Updated: {format(displayDate, 'PPP p')}</p>)}
                       </div>
                        <div className="flex items-center gap-3 md:gap-4 mt-2 md:mt-0">
                          <Badge variant={statusVariant} className="text-xs capitalize">{receipt.status}</Badge>
@@ -210,7 +210,7 @@ function AdminBillListContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No admin receipts found for current filters. Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">No admin receipts found for current filters. Waiting for MongoDB configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

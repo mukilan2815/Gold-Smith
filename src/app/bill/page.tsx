@@ -3,17 +3,6 @@
 import type { ChangeEvent} from 'react';
 import {useState, useEffect, useCallback}from 'react';
 import {useRouter}from 'next/navigation';
-// import {
-//   collection,
-//   getDocs,
-//   query,
-//   orderBy,
-//   deleteDoc,
-//   doc,
-//   Timestamp,
-//   limit,
-//   DocumentData, 
-// } from 'firebase/firestore'; // Firebase removed
 import {format, parseISO, isValid } from 'date-fns';
 import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react';
 
@@ -41,19 +30,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {cn}from '@/lib/utils';
-// import {db}from '@/lib/firebase'; // Firebase removed
 import {useToast}from '@/hooks/use-toast';
 import {useDebounce}from '@/hooks/use-debounce';
 
+// This interface should match the structure in ClientReceipts collection in MongoDB
 interface ClientReceipt {
-  id: string;
+  id: string; // Corresponds to _id from MongoDB
   clientId: string;
   clientName: string;
   shopName?: string;
   phoneNumber?: string;
   metalType: string;
-  issueDate: string; 
-  tableData: any[]; 
+  issueDate: string; // Should be a Date object from MongoDB, formatted as string for display
+  tableData: any[]; // Define more specific type if possible based on ReceiptItem
   totals: {
     grossWt: number;
     netWt: number;
@@ -61,7 +50,7 @@ interface ClientReceipt {
     stoneAmt: number;
     stoneWt?: number; 
   };
-  createdAt?: Date; // Changed from Timestamp
+  createdAt?: Date;
 }
 
 export default function ClientBillListPage() {
@@ -90,16 +79,16 @@ function ClientBillListContent() {
 
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement SQL data fetching for client receipts
-    // Example: const fetchedReceipts = await fetchClientReceiptsFromSQL();
-    // setReceipts(fetchedReceipts);
-    console.warn("Client receipts fetching not implemented. Waiting for SQL database setup.");
+    // TODO: Implement MongoDB data fetching for client receipts
+    // Example: const fetchedReceipts = await fetchClientReceiptsFromMongoDB({ filters });
+    // setReceipts(fetchedReceipts.map(r => ({...r, id: r._id.toString(), issueDate: new Date(r.issueDate).toISOString() })));
+    console.warn("Client receipts fetching not implemented. Waiting for MongoDB setup.");
     toast({
         title: "Data Fetching Pending",
-        description: "Client receipts will be loaded once the SQL database is configured.",
+        description: "Client receipts will be loaded once MongoDB is configured.",
         variant: "default"
     });
-    setReceipts([]); // Initialize with empty array
+    setReceipts([]); 
     setLoading(false);
   }, [toast]);
 
@@ -108,6 +97,7 @@ function ClientBillListContent() {
   }, [fetchReceipts]);
 
   useEffect(() => {
+    // Client-side filtering can be a fallback. Ideally, filtering is done server-side with MongoDB.
     if (!receipts) return;
     let currentReceipts = [...receipts];
     if (debouncedShopName.trim() !== '') {
@@ -124,7 +114,8 @@ function ClientBillListContent() {
       currentReceipts = currentReceipts.filter(receipt => {
         if (!receipt.issueDate || typeof receipt.issueDate !== 'string') return false;
         try {
-          const issueDateOnly = receipt.issueDate.substring(0, 10);
+          // Assuming issueDate is stored as ISO string or Date and needs formatting for comparison
+          const issueDateOnly = format(parseISO(receipt.issueDate), 'yyyy-MM-dd');
           return issueDateOnly === filterDateStr;
         } catch (e) { return false; } 
       });
@@ -137,15 +128,18 @@ function ClientBillListContent() {
   };
 
   const handleDeleteReceipt = async (receiptToDelete: ClientReceipt) => {
-    // TODO: Implement SQL data deletion for client receipt
-    // Example: await deleteClientReceiptFromSQL(receiptToDelete.id);
+    // TODO: Implement MongoDB data deletion for client receipt
+    // Example: await deleteClientReceiptFromMongoDB(receiptToDelete.id);
     // setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id));
-    console.warn(`Delete operation for receipt ID ${receiptToDelete.id} not implemented. Waiting for SQL database setup.`);
+    console.warn(`Delete operation for receipt ID ${receiptToDelete.id} not implemented. Waiting for MongoDB setup.`);
     toast({
         title: "Delete Operation Pending",
-        description: `Receipt for ${receiptToDelete.clientName} will be deleted once SQL DB is configured.`,
+        description: `Receipt for ${receiptToDelete.clientName} will be deleted once MongoDB is configured.`,
         variant: "default"
     });
+     // Simulate deletion for UI update
+    setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id));
+    toast({ title: 'Simulated Delete', description: `Receipt for ${receiptToDelete.clientName} removed from list. (MongoDB delete pending)` });
   };
 
   return (
@@ -153,7 +147,7 @@ function ClientBillListContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Client Bills</CardTitle>
-          <CardDescription>View and manage client receipts. Data will be loaded from SQL database once configured.</CardDescription>
+          <CardDescription>View and manage client receipts. Data will be loaded from MongoDB once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -175,7 +169,7 @@ function ClientBillListContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading client receipts... Please wait for SQL database configuration.
+                Loading client receipts... Please wait for MongoDB configuration.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
@@ -183,6 +177,8 @@ function ClientBillListContent() {
                   let formattedIssueDate = 'N/A';
                   if (receipt.issueDate && isValid(parseISO(receipt.issueDate))) {
                      formattedIssueDate = format(parseISO(receipt.issueDate), 'PPP');
+                  } else if (receipt.issueDate) { // If it's a Date object but not string
+                    try { formattedIssueDate = format(new Date(receipt.issueDate), 'PPP'); } catch (e) {/* ignore */}
                   }
                   return (
                     <li key={receipt.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
@@ -224,7 +220,7 @@ function ClientBillListContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No client receipts found for current filters. Waiting for SQL database configuration.</p>
+              <p className="text-muted-foreground text-center">No client receipts found for current filters. Waiting for MongoDB configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

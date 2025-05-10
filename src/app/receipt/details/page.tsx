@@ -3,15 +3,6 @@
 import type {ChangeEvent} from 'react';
 import {useState, useEffect, useRef, useCallback}from 'react';
 import {useSearchParams, useRouter}from 'next/navigation';
-// import {
-//   collection,
-//   addDoc,
-//   updateDoc,
-//   doc,
-//   getDoc,
-//   serverTimestamp,
-//   Timestamp,
-// } from 'firebase/firestore'; // Firebase removed
 import {format, parseISO, isValid}from 'date-fns';
 import {
   Calendar as CalendarIcon,
@@ -40,38 +31,39 @@ import {
 } from '@/components/ui/card';
 import {useToast}from '@/hooks/use-toast';
 import {cn}from '@/lib/utils';
-// import {db}from '@/lib/firebase'; // Firebase removed
 
-// Keep interfaces for data structure, will be mapped from/to SQL later
+// Data structure for UI and eventual mapping to/from MongoDB
 interface ReceiptItem {
-  sNo: number;
+  sNo: number; // UI only
   itemName: string;
   tag: string;
   grossWt: string;
   stoneWt: string;
-  netWt: string;
+  netWt: string; // Calculated
   meltingTouch: string;
-  finalWt: string;
+  finalWt: string; // Calculated
   stoneAmt: string;
 }
 
+// This interface represents the data structure in MongoDB's ClientReceipts collection
 interface ClientReceiptData {
+  _id?: string; // MongoDB ObjectId as string
   clientId: string;
-  clientName: string;
+  clientName: string; // Denormalized for easier display, can be fetched if needed
   shopName?: string; 
   phoneNumber?: string; 
   metalType: string;
-  issueDate: string; 
-  tableData: Omit<ReceiptItem, 'sNo'>[]; 
-  totals: {
+  issueDate: Date; // Store as Date in MongoDB
+  tableData: Omit<ReceiptItem, 'sNo' | 'netWt' | 'finalWt'>[]; // Store raw input, netWt/finalWt can be calculated on display or stored
+  totals: { // Store calculated totals
     grossWt: number;
     stoneWt: number;
     netWt: number;
     finalWt: number;
     stoneAmt: number;
   };
-  createdAt?: Date; // Changed from Timestamp
-  updatedAt?: Date; // Changed from Timestamp
+  createdAt?: Date; 
+  updatedAt?: Date; 
 }
 
 
@@ -90,7 +82,7 @@ function ReceiptDetailsContent() {
 
   const clientIdParam = searchParams.get('clientId');
   const clientNameParam = searchParams.get('clientName') || '[Client Name]';
-  const receiptIdParam = searchParams.get('receiptId');
+  const receiptIdParam = searchParams.get('receiptId'); // This will be MongoDB _id
 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [metal, setMetal] = useState('');
@@ -113,13 +105,13 @@ function ReceiptDetailsContent() {
 
   const fetchClientData = useCallback(async () => {
     if (clientIdParam) {
-      // TODO: Implement SQL data fetching for client details
-      // Example: const clientData = await fetchClientFromSQL(clientIdParam);
+      // TODO: Implement MongoDB data fetching for client details (if needed, e.g., shopName, phone)
+      // Example: const clientData = await fetchClientFromMongoDB(clientIdParam);
       // if (clientData) { setClientShopName(clientData.shopName || ''); setClientPhoneNumber(clientData.phoneNumber || ''); }
-      console.warn(`Client details fetching for ID ${clientIdParam} not implemented. Waiting for SQL database setup.`);
+      console.warn(`Client details fetching for ID ${clientIdParam} not implemented. Waiting for MongoDB setup.`);
       toast({
         title: "Client Info Pending",
-        description: "Client shop name and phone will be loaded once SQL DB is configured.",
+        description: "Client shop name and phone will be loaded once MongoDB is configured.",
         variant: "default"
       });
     }
@@ -139,16 +131,31 @@ function ReceiptDetailsContent() {
   const fetchReceipt = useCallback(async () => {
     if (existingReceiptId && clientIdParam) { 
       setIsLoading(true);
-      // TODO: Implement SQL data fetching for existing receipt
-      // Example: const data = await fetchClientReceiptFromSQL(existingReceiptId);
-      // if (data) { ... map data to state ... } else { resetToNewReceiptState(); }
-      console.warn(`Data fetching for receipt ID ${existingReceiptId} not implemented. Waiting for SQL database setup.`);
+      // TODO: Implement MongoDB data fetching for existing receipt
+      // Example: const data = await fetchClientReceiptFromMongoDB(existingReceiptId);
+      // if (data) { 
+      //   setDate(data.issueDate ? new Date(data.issueDate) : undefined);
+      //   setMetal(data.metalType || '');
+      //   // setWeight and setWeightUnit if stored
+      //   setItems(data.tableData.map((item, index) => ({
+      //      sNo: index + 1,
+      //      ...item,
+      //      netWt: calculateNetWt(item.grossWt, item.stoneWt).toFixed(3),
+      //      finalWt: calculateFinalWt(item.grossWt, item.stoneWt, item.meltingTouch).toFixed(3),
+      //   })));
+      //   setInitialState({ date: data.issueDate ? new Date(data.issueDate) : undefined, metal: data.metalType, items: data.tableData, weight: '', weightUnit: '' });
+      //   setIsEditMode(false);
+      // } else { 
+      //   toast({variant: 'destructive', title: 'Not Found', description: `Receipt with ID ${existingReceiptId} not found.`});
+      //   resetToNewReceiptState(); 
+      // }
+      console.warn(`Data fetching for receipt ID ${existingReceiptId} not implemented. Waiting for MongoDB setup.`);
       toast({
           title: "Data Fetching Pending",
-          description: `Receipt details for ${existingReceiptId} will be loaded once SQL DB is configured. Starting new for now.`,
+          description: `Receipt details for ${existingReceiptId} will be loaded once MongoDB is configured.`,
           variant: "default"
       });
-      resetToNewReceiptState(); // Default to new if fetching fails or not implemented
+      // resetToNewReceiptState(); // Default to new if fetching fails or not implemented
       setIsLoading(false);
     } else if (!existingReceiptId) { 
       resetToNewReceiptState();
@@ -205,6 +212,18 @@ function ReceiptDetailsContent() {
     setItems(newItems);
   };
 
+  const calculateNetWt = (grossWtStr: string, stoneWtStr: string) => {
+    const grossWt = parseFloat(grossWtStr) || 0;
+    const stoneWt = parseFloat(stoneWtStr) || 0;
+    return Math.max(0, grossWt - stoneWt);
+  };
+
+  const calculateFinalWt = (grossWtStr: string, stoneWtStr: string, meltingTouchStr: string) => {
+    const netWtValue = calculateNetWt(grossWtStr, stoneWtStr);
+    const meltingTouch = parseFloat(meltingTouchStr) || 0;
+    const effectiveMeltingTouch = meltingTouch === 0 ? 100 : meltingTouch; // Avoid division by zero
+    return (netWtValue * effectiveMeltingTouch) / 100;
+  };
 
   const handleInputChange = (index: number, field: keyof ReceiptItem, value: any) => {
     if (!isEditMode) return; 
@@ -212,15 +231,9 @@ function ReceiptDetailsContent() {
     setItems(prevItems => {
       const newItems = [...prevItems];
       const currentItem = {...newItems[index], [field]: value};
-
-      const grossWt = parseFloat(currentItem.grossWt) || 0;
-      const stoneWt = parseFloat(currentItem.stoneWt) || 0;
-      const meltingTouch = parseFloat(currentItem.meltingTouch) || 0;
-
-      const netWtValue = Math.max(0, grossWt - stoneWt);
-      currentItem.netWt = netWtValue.toFixed(3);
-      const effectiveMeltingTouch = meltingTouch === 0 ? 100 : meltingTouch; 
-      currentItem.finalWt = ((netWtValue * effectiveMeltingTouch) / 100).toFixed(3);
+      
+      currentItem.netWt = calculateNetWt(currentItem.grossWt, currentItem.stoneWt).toFixed(3);
+      currentItem.finalWt = calculateFinalWt(currentItem.grossWt, currentItem.stoneWt, currentItem.meltingTouch).toFixed(3);
       
       newItems[index] = currentItem;
       return newItems;
@@ -268,44 +281,62 @@ function ReceiptDetailsContent() {
       toast({variant: 'destructive', title: 'Validation Error', description: 'Please select a metal type.'});
       return;
     }
-    const validItems = items.filter(item =>
+    const validItemsForSave = items.filter(item =>
       item.itemName.trim() !== '' || item.tag.trim() !== '' || item.grossWt.trim() !== '' ||
       item.stoneWt.trim() !== '' || item.meltingTouch.trim() !== '' || item.stoneAmt.trim() !== ''
-    );
+    ).map(({ sNo, netWt, finalWt, ...dbItem }) => dbItem); // Exclude UI-only fields
 
-    if (validItems.length === 0) {
+    if (validItemsForSave.length === 0) {
       toast({variant: 'destructive', title: 'Validation Error', description: 'Please add at least one valid item with some details.'});
       return;
     }
 
     setIsSaving(true);
-    // TODO: Implement SQL data saving/updating here
-    // This logic will be significantly different for SQL.
-    // You'll need to interact with your SQL database client (e.g., Prisma).
-    // 1. Check if a receipt exists.
-    // 2. If exists, update. If not, insert.
-    console.warn(`Save operation for receipt not implemented. Waiting for SQL database setup.`);
+
+    const receiptDataToSave: Omit<ClientReceiptData, '_id' | 'createdAt' | 'updatedAt'> = {
+        clientId: clientIdParam,
+        clientName: clientNameParam, // Denormalized
+        shopName: clientShopName, // Denormalized
+        phoneNumber: clientPhoneNumber, // Denormalized
+        metalType: metal,
+        issueDate: date, 
+        tableData: validItemsForSave,
+        totals: {
+            grossWt: calculateTotal('grossWt'),
+            stoneWt: calculateTotal('stoneWt'),
+            netWt: calculateTotal('netWt'),
+            finalWt: calculateTotal('finalWt'),
+            stoneAmt: calculateTotal('stoneAmt'),
+        },
+    };
+
+    // TODO: Implement MongoDB data saving/updating here
+    // if (existingReceiptId) {
+    //   await updateClientReceiptInMongoDB(existingReceiptId, {...receiptDataToSave, updatedAt: new Date()});
+    // } else {
+    //   const newReceipt = await createClientReceiptInMongoDB({...receiptDataToSave, createdAt: new Date(), updatedAt: new Date()});
+    //   setExistingReceiptId(newReceipt._id.toString()); // Assuming MongoDB returns the new document with _id
+    //   router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceipt._id.toString()}`, { scroll: false });
+    // }
+    console.warn(`Save operation for receipt not implemented. Waiting for MongoDB setup.`);
     toast({
         title: "Save Operation Pending",
-        description: `Client receipt for ${clientNameParam} will be saved once SQL DB is configured.`,
+        description: `Client receipt for ${clientNameParam} will be saved/updated once MongoDB is configured.`,
         variant: "default"
     });
 
     // Simulating a save for UI update
     let tempExistingReceiptId = existingReceiptId;
     if (!tempExistingReceiptId) {
-        tempExistingReceiptId = `temp_sql_id_${Date.now()}`; // Placeholder
+        tempExistingReceiptId = `temp_mongo_id_${Date.now()}`; // Placeholder
         setExistingReceiptId(tempExistingReceiptId);
         router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${tempExistingReceiptId}`, { scroll: false });
     }
     
-    const savedItemsForInitialState = validItems.map((it, idx) => ({
-        ...it, sNo: idx + 1, 
-        netWt: it.netWt, finalWt: it.finalWt, 
-    }));
+    const savedItemsForInitialState = items.map((it, idx) => ({ ...it, sNo: idx + 1 }));
     setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(savedItemsForInitialState))});
     setIsEditMode(false); 
-    toast({ title: 'Simulated Save', description: 'Client receipt data prepared. (SQL Save Pending)' });
+    toast({ title: 'Simulated Save', description: 'Client receipt data prepared. (MongoDB Save/Update Pending)' });
     setIsSaving(false);
   };
 
@@ -462,7 +493,7 @@ function ReceiptDetailsContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
-          <p>Loading receipt details... Waiting for SQL database configuration.</p>
+          <p>Loading receipt details... Waiting for MongoDB configuration.</p>
         </div>
       </Layout>
     );
@@ -476,7 +507,7 @@ function ReceiptDetailsContent() {
       <div className={`flex flex-col justify-start min-h-screen bg-secondary ${contentPadding}`}>
         <Card className={mainCardClasses}>
           <CardHeader className={`space-y-1 ${contentPadding} pb-2`}>
-             <CardDescription>Client receipt data will be stored in SQL database once configured.</CardDescription>
+             <CardDescription>Client receipt data will be stored in MongoDB once configured.</CardDescription>
             <div className="flex flex-wrap justify-between items-center gap-2">
               <div>
                 <CardTitle className="text-xl md:text-2xl">Client Receipt</CardTitle>
