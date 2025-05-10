@@ -15,30 +15,30 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp, Timestamp, DocumentData } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+// import { doc, getDoc, setDoc, collection, updateDoc, serverTimestamp, Timestamp, DocumentData } from 'firebase/firestore'; // Firebase removed
+// import { db } from '@/lib/firebase'; // Firebase removed
 
-// UI-specific item structure with temporary ID
+// Keep UI-specific item structure
 interface GivenItemUI {
-  id: string; // For UI key and removal logic
+  id: string; 
   productName: string;
   pureWeight: string;
   purePercent: string;
   melting: string;
-  total: number; // Calculated for UI
+  total: number; 
 }
 
 interface ReceivedItemUI {
-  id: string; // For UI key and removal logic
+  id: string; 
   productName: string;
   finalOrnamentsWt: string;
   stoneWeight: string;
-  makingChargePercent: string; // Changed from makingCharge
-  subTotal: number; // Calculated for UI
-  total: number; // Calculated for UI
+  makingChargePercent: string; 
+  subTotal: number; 
+  total: number; 
 }
 
-// Firestore data structure (without UI id)
+// Keep Firestore data structure for eventual mapping from/to SQL
 interface GivenItemFirestore {
   productName: string;
   pureWeight: string;
@@ -58,14 +58,14 @@ interface ReceivedItemFirestore {
 
 
 interface GivenData {
-    date: string | null; // ISO string
+    date: string | null; 
     items: GivenItemFirestore[];
     totalPureWeight: number;
     total: number;
 }
 
 interface ReceivedData {
-    date: string | null; // ISO string
+    date: string | null; 
     items: ReceivedItemFirestore[];
     totalOrnamentsWt: number;
     totalStoneWeight: number;
@@ -79,8 +79,8 @@ interface AdminReceiptData {
   given: GivenData | null;
   received: ReceivedData | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Timestamp; // Firestore Timestamp
-  updatedAt: Timestamp; // Firestore Timestamp
+  createdAt: Date; // Changed from Timestamp
+  updatedAt: Date; // Changed from Timestamp
 }
 
 const generateId = () => `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -89,7 +89,7 @@ const calculateGivenTotal = (item: GivenItemUI): number => {
   const pureWeight = parseFloat(item.pureWeight) || 0;
   const purePercent = parseFloat(item.purePercent) || 0;
   const melting = parseFloat(item.melting) || 0;
-  if (melting === 0) return 0; // Avoid division by zero
+  if (melting === 0) return 0; 
   const total = (pureWeight * purePercent) / melting;
   return parseFloat(total.toFixed(3));
 };
@@ -102,9 +102,9 @@ const calculateReceivedSubTotal = (item: ReceivedItemUI): number => {
 };
 
 const calculateReceivedTotal = (item: ReceivedItemUI): number => {
-  const subTotal = calculateReceivedSubTotal(item); // Use the already calculated subTotal
+  const subTotal = calculateReceivedSubTotal(item); 
   const makingChargePercent = parseFloat(item.makingChargePercent) || 0;
-  const total = subTotal * (makingChargePercent / 100); // Correct calculation for percentage
+  const total = subTotal * (makingChargePercent / 100); 
   return parseFloat(total.toFixed(3));
 };
 
@@ -130,12 +130,11 @@ function AdminReceiptDetailsContent() {
   const [givenItems, setGivenItems] = useState<GivenItemUI[]>([{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
   const [receivedItems, setReceivedItems] = useState<ReceivedItemUI[]>([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
   
-  // Manual comparison state (not saved to Firestore)
   const [manualGivenTotal, setManualGivenTotal] = useState('');
   const [manualReceivedTotal, setManualReceivedTotal] = useState('');
   const [manualOperation, setManualOperation] = useState<'add' | 'subtract'>('subtract');
 
-  const [loading, setLoading] = useState(true); // True if receiptIdParam exists, to load data
+  const [loading, setLoading] = useState(true); 
   const [isSaving, setIsSaving] = useState(false);
   const [currentReceiptId, setCurrentReceiptId] = useState<string | null>(receiptIdParam);
 
@@ -144,51 +143,35 @@ function AdminReceiptDetailsContent() {
      setReceivedItems([{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
      setDateGiven(undefined);
      setDateReceived(undefined);
-     setCurrentReceiptId(null); // Explicitly clear receipt ID for new forms
+     setCurrentReceiptId(null); 
      setManualGivenTotal('');
      setManualReceivedTotal('');
    }, []);
 
   useEffect(() => {
     const fetchReceiptData = async () => {
-      if (!clientId) { // clientId is essential
+      if (!clientId) { 
         toast({ variant: "destructive", title: "Error", description: "Client ID is missing. Cannot proceed." });
-        router.push('/admin-receipt'); // Redirect to selection if no client ID
+        router.push('/admin-receipt'); 
         setLoading(false);
         return;
       }
 
-      if (receiptIdParam) { // If there's a receipt ID, attempt to load it
+      if (receiptIdParam) { 
         setLoading(true);
         setCurrentReceiptId(receiptIdParam);
-        try {
-          const receiptRef = doc(db, 'AdminReceipts', receiptIdParam);
-          const docSnap = await getDoc(receiptRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data() as AdminReceiptData; // Cast to new structure
-            
-            setDateGiven(data.given?.date && isValid(parseISO(data.given.date)) ? parseISO(data.given.date) : undefined);
-            setGivenItems(data.given?.items && data.given.items.length > 0 ? data.given.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-            
-            setDateReceived(data.received?.date && isValid(parseISO(data.received.date)) ? parseISO(data.received.date) : undefined);
-            setReceivedItems(data.received?.items && data.received.items.length > 0 ? data.received.items.map(item => ({ ...item, id: generateId() })) : [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-            
-            // Pre-fill manual comparison from saved totals if available
-            setManualGivenTotal(data.given?.total?.toFixed(3) ?? '');
-            setManualReceivedTotal(data.received?.total?.toFixed(3) ?? '');
-
-          } else { // Receipt ID provided but not found
-            toast({ variant: "default", title: "New Receipt", description: `No existing admin receipt found for ID ${receiptIdParam}. Creating a new one for ${clientName}.` });
-            resetFormForNewReceipt(); // Reset form but keep client context
-          }
-        } catch (error) {
-          console.error("Error fetching admin receipt from Firestore:", error);
-          toast({ variant: "destructive", title: "Error Loading Receipt", description: "Could not load receipt data. Starting new. Check Firestore and console. Ensure indexes for 'AdminReceipts' are correct." });
-          resetFormForNewReceipt(); // Reset form on error
-        } finally {
-          setLoading(false);
-        }
-      } else { // No receipt ID param, so it's a new receipt for the client
+        // TODO: Implement SQL data fetching for existing receipt
+        // Example: const data = await fetchAdminReceiptFromSQL(receiptIdParam);
+        // if (data) { ... map data to state ... } else { resetFormForNewReceipt(); }
+        console.warn(`Data fetching for receipt ID ${receiptIdParam} not implemented. Waiting for SQL database setup.`);
+        toast({
+            title: "Data Fetching Pending",
+            description: `Admin receipt details for ${receiptIdParam} will be loaded once SQL DB is configured. Starting new for now.`,
+            variant: "default"
+        });
+        resetFormForNewReceipt(); // Default to new if fetching fails or not implemented
+        setLoading(false);
+      } else { 
           resetFormForNewReceipt();
           setLoading(false);
       }
@@ -199,18 +182,17 @@ function AdminReceiptDetailsContent() {
 
   const handleInputChange = <T extends GivenItemUI | ReceivedItemUI>(
     index: number,
-    field: keyof T, // Make field type-safe
+    field: keyof T, 
     value: string,
     type: 'given' | 'received'
   ) => {
     if (type === 'given') {
       const newItems = [...givenItems];
-      // Create a new item object to avoid direct state mutation
       const item = { ...newItems[index], [field]: value } as GivenItemUI;
       item.total = calculateGivenTotal(item);
       newItems[index] = item;
       setGivenItems(newItems);
-    } else { // 'received'
+    } else { 
       const newItems = [...receivedItems];
       const item = { ...newItems[index], [field]: value } as ReceivedItemUI;
       item.subTotal = calculateReceivedSubTotal(item);
@@ -223,20 +205,20 @@ function AdminReceiptDetailsContent() {
  const handleAddItem = (type: 'given' | 'received') => {
     if (type === 'given') {
         setGivenItems([...givenItems, { id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-    } else { // 'received'
+    } else { 
         setReceivedItems([...receivedItems, { id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
     }
 };
 
   const handleRemoveItem = (id: string, type: 'given' | 'received') => {
     if (type === 'given') {
-        if (givenItems.length > 1) { // Prevent removing the last item
+        if (givenItems.length > 1) { 
             setGivenItems(givenItems.filter(item => item.id !== id));
         } else {
             toast({ variant: "destructive", title: "Cannot Remove", description: "At least one 'Given' item row is required." });
         }
-    } else { // 'received'
-         if (receivedItems.length > 1) { // Prevent removing the last item
+    } else { 
+         if (receivedItems.length > 1) { 
             setReceivedItems(receivedItems.filter(item => item.id !== id));
          } else {
              toast({ variant: "destructive", title: "Cannot Remove", description: "At least one 'Received' item row is required." });
@@ -250,7 +232,6 @@ function AdminReceiptDetailsContent() {
       return;
     }
 
-    // Filter out completely empty rows before saving and map to Firestore structure (remove UI 'id')
     const finalGivenItemsToSave: GivenItemFirestore[] = givenItems
        .filter(item => item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== '')
        .map(({ id, ...rest }) => rest);
@@ -261,7 +242,6 @@ function AdminReceiptDetailsContent() {
     let hasGivenDataForSave = finalGivenItemsToSave.length > 0;
     let hasReceivedDataForSave = finalReceivedItemsToSave.length > 0;
 
-    // Validation for dates if corresponding items exist
     if (saveType === 'given' && hasGivenDataForSave && !dateGiven) {
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a date for the "Given" items.' });
       return;
@@ -270,7 +250,6 @@ function AdminReceiptDetailsContent() {
       toast({ variant: 'destructive', title: 'Validation Error', description: 'Please select a date for the "Received" items.' });
       return;
     }
-    // More specific validation: if any field in a row is filled, then it's considered an attempt to add an item
      if (saveType === 'given' && !hasGivenDataForSave && givenItems.some(i => i.productName || i.pureWeight || i.purePercent || i.melting)) {
        toast({ variant: 'destructive', title: 'Validation Error', description: 'Please complete details for "Given" items or clear empty/partially filled rows.' });
        return;
@@ -280,127 +259,43 @@ function AdminReceiptDetailsContent() {
        return;
     }
 
-
     setIsSaving(true);
-    const savingToast = toast({ 
-        title: `Saving admin receipt ${saveType} data...`, 
-        description: 'Please wait. If slow, check Firestore indexes for "AdminReceipts" (e.g., on createdAt). See firestore.indexes.md.' 
+    // TODO: Implement SQL data saving/updating here
+    // This logic will be significantly different for SQL.
+    // You'll need to interact with your SQL database client (e.g., Prisma).
+    // 1. Check if a receipt exists for this client and potentially date.
+    // 2. If exists, update. If not, insert.
+    // 3. Handle 'given' and 'received' data updates based on `saveType`.
+    // 4. Update `status` accordingly.
+
+    console.warn(`Save operation for type "${saveType}" not implemented. Waiting for SQL database setup.`);
+    toast({
+        title: "Save Operation Pending",
+        description: `Admin receipt ${saveType} data for ${clientName} will be saved once SQL DB is configured.`,
+        variant: "default"
     });
-
-    // Calculate totals based on the items being saved
-    const totalGivenPureWeightCalc = finalGivenItemsToSave.reduce((sum, item) => sum + (parseFloat(item.pureWeight) || 0), 0);
-    const totalGivenTotalCalc = finalGivenItemsToSave.reduce((sum, item) => sum + item.total, 0);
     
-    const totalReceivedFinalOrnamentsWtCalc = finalReceivedItemsToSave.reduce((sum, item) => sum + (parseFloat(item.finalOrnamentsWt) || 0), 0);
-    const totalReceivedStoneWeightCalc = finalReceivedItemsToSave.reduce((sum, item) => sum + (parseFloat(item.stoneWeight) || 0), 0);
-    const totalReceivedSubTotalCalc = finalReceivedItemsToSave.reduce((sum, item) => sum + item.subTotal, 0);
-    const totalReceivedTotalCalc = finalReceivedItemsToSave.reduce((sum, item) => sum + item.total, 0);
-
-    let newGivenDataForFirestore: GivenData | null = null;
-    if (saveType === 'given' && hasGivenDataForSave) {
-        newGivenDataForFirestore = {
-          date: dateGiven!.toISOString(), // Date is validated to be present
-          items: finalGivenItemsToSave,
-          totalPureWeight: parseFloat(totalGivenPureWeightCalc.toFixed(3)),
-          total: parseFloat(totalGivenTotalCalc.toFixed(3)),
-        };
-    } else if (saveType === 'given' && !hasGivenDataForSave) {
-      // If saving "given" and there's no data, explicitly set to null to clear it
-      newGivenDataForFirestore = null;
-    }
-
-
-    let newReceivedDataForFirestore: ReceivedData | null = null;
-    if (saveType === 'received' && hasReceivedDataForSave) {
-        newReceivedDataForFirestore = {
-          date: dateReceived!.toISOString(), // Date is validated
-          items: finalReceivedItemsToSave,
-          totalOrnamentsWt: parseFloat(totalReceivedFinalOrnamentsWtCalc.toFixed(3)),
-          totalStoneWeight: parseFloat(totalReceivedStoneWeightCalc.toFixed(3)),
-          totalSubTotal: parseFloat(totalReceivedSubTotalCalc.toFixed(3)),
-          total: parseFloat(totalReceivedTotalCalc.toFixed(3)),
-        };
-    } else if (saveType === 'received' && !hasReceivedDataForSave) {
-      // If saving "received" and there's no data, explicitly set to null
-      newReceivedDataForFirestore = null;
+    // Simulating a save for UI update, actual save needs SQL.
+    let tempCurrentReceiptId = currentReceiptId;
+    if (!tempCurrentReceiptId) {
+        tempCurrentReceiptId = `temp_sql_id_${Date.now()}`; // Placeholder
+        setCurrentReceiptId(tempCurrentReceiptId);
+        router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${tempCurrentReceiptId}`, { scroll: false });
     }
     
-    let tempCurrentReceiptId = currentReceiptId; // Use a mutable variable for receipt ID logic
+    // Determine status based on current UI state (for simulation)
+    let finalStatus: 'complete' | 'incomplete' | 'empty';
+    const hasFinalGiven = saveType === 'given' ? hasGivenDataForSave : (givenItems.filter(i => i.productName).length > 0);
+    const hasFinalReceived = saveType === 'received' ? hasReceivedDataForSave : (receivedItems.filter(i => i.productName).length > 0);
 
-    try {
-        const updateData: Partial<AdminReceiptData> = { updatedAt: serverTimestamp() as Timestamp };
-        let finalGivenData: GivenData | null = null;
-        let finalReceivedData: ReceivedData | null = null;
+    if (hasFinalGiven && hasFinalReceived) finalStatus = 'complete';
+    else if (hasFinalGiven || hasFinalReceived) finalStatus = 'incomplete';
+    else finalStatus = 'empty';
 
-        if (tempCurrentReceiptId) { // If updating an existing receipt
-            const docRef = doc(db, 'AdminReceipts', tempCurrentReceiptId);
-            const existingDocSnap = await getDoc(docRef);
-
-            if (existingDocSnap.exists()) {
-                const existingData = existingDocSnap.data() as AdminReceiptData;
-                if (saveType === 'given') {
-                    updateData.given = newGivenDataForFirestore;
-                    finalGivenData = newGivenDataForFirestore;
-                    finalReceivedData = existingData.received; // Keep existing received if only saving given
-                } else { // saveType === 'received'
-                    updateData.received = newReceivedDataForFirestore;
-                    finalReceivedData = newReceivedDataForFirestore;
-                    finalGivenData = existingData.given; // Keep existing given if only saving received
-                }
-                await updateDoc(docRef, updateData);
-            } else { // Document ID was provided but not found, treat as new (should be rare)
-                console.warn(`Document ${tempCurrentReceiptId} not found during update, creating new.`);
-                tempCurrentReceiptId = null; // Force creation logic
-            }
-        }
-        
-        if (!tempCurrentReceiptId) { // Creating a new receipt
-            finalGivenData = saveType === 'given' ? newGivenDataForFirestore : null;
-            finalReceivedData = saveType === 'received' ? newReceivedDataForFirestore : null;
-
-            const newReceiptData: Omit<AdminReceiptData, 'createdAt' | 'updatedAt'> & { createdAt: Timestamp, updatedAt: Timestamp } = {
-                clientId: clientId!,
-                clientName: clientName!,
-                given: finalGivenData,
-                received: finalReceivedData,
-                status: 'incomplete', // Will be updated below
-                createdAt: serverTimestamp() as Timestamp,
-                updatedAt: serverTimestamp() as Timestamp,
-            };
-            const newReceiptRef = doc(collection(db, 'AdminReceipts'));
-            await setDoc(newReceiptRef, newReceiptData);
-            setCurrentReceiptId(newReceiptRef.id); // Update state with the new ID
-            tempCurrentReceiptId = newReceiptRef.id; // For status update below
-             // Update URL to include new receipt ID, prevents creating multiple new ones on resave
-            router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${newReceiptRef.id}`, { scroll: false });
-        }
-
-        // Determine and update status after save/create
-        let finalStatus: 'complete' | 'incomplete' | 'empty';
-        const hasFinalGiven = finalGivenData && finalGivenData.items.length > 0;
-        const hasFinalReceived = finalReceivedData && finalReceivedData.items.length > 0;
-
-        if (hasFinalGiven && hasFinalReceived) finalStatus = 'complete';
-        else if (hasFinalGiven || hasFinalReceived) finalStatus = 'incomplete';
-        else finalStatus = 'empty';
-        
-        if (tempCurrentReceiptId) { // tempCurrentReceiptId will be set if new or existing
-            await updateDoc(doc(db, 'AdminReceipts', tempCurrentReceiptId), { status: finalStatus, updatedAt: serverTimestamp() });
-        }
-
-        toast.update(savingToast.id, { title: 'Success', description: `Admin receipt ${saveType} data saved for ${clientName}. Status: ${finalStatus}.` });
-
-    } catch (error) {
-         console.error("Error saving admin receipt to Firestore:", error);
-         const errorMsg = error instanceof Error ? error.message : "Unknown error occurred."
-         toast.update(savingToast.id, { variant: 'destructive', title: 'Save Error', description: `Failed to save ${saveType} data. ${errorMsg} Check console and Firestore setup.` });
-    } finally {
-        setIsSaving(false);
-    }
+    toast({ title: 'Simulated Save', description: `Admin receipt ${saveType} data for ${clientName}. Status: ${finalStatus}. (SQL Save Pending)` });
+    setIsSaving(false);
   };
 
-
-  // UI Totals should reflect what's currently in the input fields
   const validUiGivenItems = givenItems.filter(item =>
     item.productName.trim() !== '' || item.pureWeight.trim() !== '' || item.purePercent.trim() !== '' || item.melting.trim() !== ''
   );
@@ -421,7 +316,7 @@ function AdminReceiptDetailsContent() {
     const received = parseFloat(manualReceivedTotal) || 0;
     let result = 0;
     if (manualOperation === 'add') result = given + received;
-    else result = given - received; // Default to subtract
+    else result = given - received; 
     return result.toFixed(3);
   };
 
@@ -429,7 +324,7 @@ function AdminReceiptDetailsContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
-          <p>Loading admin receipt details... If slow, check Firestore indexes for 'AdminReceipts'. See firestore.indexes.md.</p>
+          <p>Loading admin receipt details... Waiting for SQL database configuration.</p>
         </div>
       </Layout>
     );
@@ -441,7 +336,7 @@ function AdminReceiptDetailsContent() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">Admin Receipt for: {clientName}</CardTitle>
-            <CardDescription>Manage given and received items. Slow saving? Check Firestore indexes for 'AdminReceipts' (e.g., on createdAt). See firestore.indexes.md.</CardDescription>
+            <CardDescription>Manage given and received items. Data will be saved to SQL database once configured.</CardDescription>
             {currentReceiptId && <p className="text-xs text-muted-foreground">Receipt ID: {currentReceiptId}</p>}
           </CardHeader>
           <CardContent>

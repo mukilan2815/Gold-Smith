@@ -2,17 +2,17 @@
 
 import type {ChangeEvent} from 'react';
 import {useState, useEffect, useRef, useCallback}from 'react';
-import {useSearchParams, useRouter} from 'next/navigation';
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  doc,
-  getDoc,
-  serverTimestamp,
-  Timestamp,
-} from 'firebase/firestore';
-import {format, parseISO, isValid} from 'date-fns';
+import {useSearchParams, useRouter}from 'next/navigation';
+// import {
+//   collection,
+//   addDoc,
+//   updateDoc,
+//   doc,
+//   getDoc,
+//   serverTimestamp,
+//   Timestamp,
+// } from 'firebase/firestore'; // Firebase removed
+import {format, parseISO, isValid}from 'date-fns';
 import {
   Calendar as CalendarIcon,
   PlusCircle,
@@ -26,11 +26,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import Layout from '@/components/Layout';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
-import {Calendar} from '@/components/ui/calendar';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
+import {Button}from '@/components/ui/button';
+import {Input}from '@/components/ui/input';
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue}from '@/components/ui/select';
+import {Calendar}from '@/components/ui/calendar';
+import {Popover, PopoverContent, PopoverTrigger}from '@/components/ui/popover';
 import {
   Card,
   CardContent,
@@ -40,8 +40,9 @@ import {
 } from '@/components/ui/card';
 import {useToast}from '@/hooks/use-toast';
 import {cn}from '@/lib/utils';
-import {db}from '@/lib/firebase';
+// import {db}from '@/lib/firebase'; // Firebase removed
 
+// Keep interfaces for data structure, will be mapped from/to SQL later
 interface ReceiptItem {
   sNo: number;
   itemName: string;
@@ -57,11 +58,11 @@ interface ReceiptItem {
 interface ClientReceiptData {
   clientId: string;
   clientName: string;
-  shopName?: string; // From ClientDetails
-  phoneNumber?: string; // From ClientDetails
+  shopName?: string; 
+  phoneNumber?: string; 
   metalType: string;
-  issueDate: string; // Stored as ISO string
-  tableData: Omit<ReceiptItem, 'sNo'>[]; // sNo is for UI only
+  issueDate: string; 
+  tableData: Omit<ReceiptItem, 'sNo'>[]; 
   totals: {
     grossWt: number;
     stoneWt: number;
@@ -69,8 +70,8 @@ interface ClientReceiptData {
     finalWt: number;
     stoneAmt: number;
   };
-  createdAt?: Timestamp; // Firestore Timestamp
-  updatedAt?: Timestamp; // Firestore Timestamp
+  createdAt?: Date; // Changed from Timestamp
+  updatedAt?: Date; // Changed from Timestamp
 }
 
 
@@ -93,8 +94,8 @@ function ReceiptDetailsContent() {
 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [metal, setMetal] = useState('');
-  const [weight, setWeight] = useState(''); // Overall weight, optional
-  const [weightUnit, setWeightUnit] = useState(''); // Unit for overall weight, optional
+  const [weight, setWeight] = useState(''); 
+  const [weightUnit, setWeightUnit] = useState(''); 
   const [items, setItems] = useState<ReceiptItem[]>([
     {sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''},
   ]);
@@ -112,20 +113,15 @@ function ReceiptDetailsContent() {
 
   const fetchClientData = useCallback(async () => {
     if (clientIdParam) {
-      try {
-        const clientRef = doc(db, 'ClientDetails', clientIdParam);
-        const docSnap = await getDoc(clientRef);
-        if (docSnap.exists()) {
-          const clientData = docSnap.data();
-          setClientShopName(clientData.shopName || '');
-          setClientPhoneNumber(clientData.phoneNumber || '');
-        } else {
-          toast({ variant: "destructive", title: "Client Info Missing", description: "Could not fetch details for the selected client." });
-        }
-      } catch (error) {
-        console.error('Error fetching client details:', error);
-         toast({ variant: "destructive", title: "Fetch Error", description: "Could not fetch client details. Check Firestore setup and console." });
-      }
+      // TODO: Implement SQL data fetching for client details
+      // Example: const clientData = await fetchClientFromSQL(clientIdParam);
+      // if (clientData) { setClientShopName(clientData.shopName || ''); setClientPhoneNumber(clientData.phoneNumber || ''); }
+      console.warn(`Client details fetching for ID ${clientIdParam} not implemented. Waiting for SQL database setup.`);
+      toast({
+        title: "Client Info Pending",
+        description: "Client shop name and phone will be loaded once SQL DB is configured.",
+        variant: "default"
+      });
     }
   }, [clientIdParam, toast]);
 
@@ -136,81 +132,32 @@ function ReceiptDetailsContent() {
     setWeightUnit('');
     setItems([{sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''}]);
     setInitialState(null);
-    setIsEditMode(true); // New receipts are always in edit mode
+    setIsEditMode(true); 
     setExistingReceiptId(null);
   }, []);
 
   const fetchReceipt = useCallback(async () => {
-    if (existingReceiptId && clientIdParam) { // Ensure clientIdParam is also present
+    if (existingReceiptId && clientIdParam) { 
       setIsLoading(true);
-      try {
-        const receiptRef = doc(db, 'ClientReceipts', existingReceiptId);
-        const docSnap = await getDoc(receiptRef);
-
-        if (docSnap.exists()) {
-          const data = docSnap.data() as ClientReceiptData;
-          // Ensure date parsing is robust
-          const loadedDate = data.issueDate && isValid(parseISO(data.issueDate)) ? parseISO(data.issueDate) : new Date();
-          const loadedMetal = data.metalType || '';
-          // Overall weight and unit are not typically part of the receipt's persisted data structure based on requirements
-          const loadedWeight = ''; 
-          const loadedWeightUnit = '';
-
-          const loadedItems = data.tableData && data.tableData.length > 0
-            ? data.tableData.map((item, index) => {
-                // Recalculate netWt and finalWt based on fetched data to ensure consistency
-                const grossWtVal = parseFloat(item.grossWt || '0');
-                const stoneWtVal = parseFloat(item.stoneWt || '0');
-                const meltingTouchVal = parseFloat(item.meltingTouch || '0');
-                
-                const netWtVal = grossWtVal - stoneWtVal;
-                const calculatedNetWt = Math.max(0, netWtVal); // Ensure netWt is not negative
-                // Use 100 for melting touch if it's 0 to avoid division by zero, though it should ideally be > 0
-                const finalWtVal = meltingTouchVal === 0 ? 0 : (calculatedNetWt * meltingTouchVal) / 100;
-
-                return {
-                  ...item, // Spread item first
-                  sNo: index + 1,
-                  grossWt: item.grossWt || '', // Keep original string for input
-                  stoneWt: item.stoneWt || '', // Keep original string for input
-                  meltingTouch: item.meltingTouch || '', // Keep original string for input
-                  stoneAmt: item.stoneAmt || '', // Keep original string for input
-                  netWt: calculatedNetWt.toFixed(3), // Calculated display value
-                  finalWt: finalWtVal.toFixed(3),   // Calculated display value
-                };
-              })
-            : [{sNo: 1, itemName: '', tag: '', grossWt: '', stoneWt: '', netWt: '0.000', meltingTouch: '', finalWt: '0.000', stoneAmt: ''}];
-
-          setDate(loadedDate);
-          setMetal(loadedMetal);
-          setWeight(loadedWeight); // Not part of persisted data
-          setWeightUnit(loadedWeightUnit); // Not part of persisted data
-          setItems(loadedItems);
-          const initialStateData = {date: loadedDate, metal: loadedMetal, weight: loadedWeight, weightUnit: loadedWeightUnit, items: loadedItems};
-          setInitialState(JSON.parse(JSON.stringify(initialStateData))); // Deep copy for initial state
-          setIsEditMode(false); // Existing receipts start in view mode
-        } else {
-          toast({variant: 'destructive', title: 'Not Found', description: 'Receipt not found. Starting a new receipt.'});
-          setExistingReceiptId(null); // Clear invalid ID
-          resetToNewReceiptState();
-        }
-      } catch (error) {
-        console.error('Error fetching receipt:', error);
-        toast({variant: 'destructive', title: 'Error', description: 'Could not load receipt details. Starting new. Check Firestore & console.'});
-        setExistingReceiptId(null); // Clear invalid ID
-        resetToNewReceiptState();
-      } finally {
-        setIsLoading(false);
-      }
-    } else if (!existingReceiptId) { // If no receiptIdParam was provided, it's a new receipt
+      // TODO: Implement SQL data fetching for existing receipt
+      // Example: const data = await fetchClientReceiptFromSQL(existingReceiptId);
+      // if (data) { ... map data to state ... } else { resetToNewReceiptState(); }
+      console.warn(`Data fetching for receipt ID ${existingReceiptId} not implemented. Waiting for SQL database setup.`);
+      toast({
+          title: "Data Fetching Pending",
+          description: `Receipt details for ${existingReceiptId} will be loaded once SQL DB is configured. Starting new for now.`,
+          variant: "default"
+      });
+      resetToNewReceiptState(); // Default to new if fetching fails or not implemented
+      setIsLoading(false);
+    } else if (!existingReceiptId) { 
       resetToNewReceiptState();
       setIsLoading(false);
     }
-    // If existingReceiptId is present but clientIdParam is not, it's an invalid state, isLoading should be false.
     else if (!clientIdParam) {
         setIsLoading(false);
         toast({variant: 'destructive', title: 'Error', description: 'Client ID is missing. Cannot load receipt.'});
-        router.push('/receipt'); // Redirect if client ID is missing for an existing receipt
+        router.push('/receipt'); 
     }
   }, [clientIdParam, existingReceiptId, toast, resetToNewReceiptState, router]);
 
@@ -219,21 +166,18 @@ function ReceiptDetailsContent() {
   }, [fetchClientData]);
 
   useEffect(() => {
-    if (receiptIdParam) { // if URL has receiptId, set it for fetching
+    if (receiptIdParam) { 
       setExistingReceiptId(receiptIdParam);
-       // Fetch will be triggered by existingReceiptId change if clientIdParam is also present
-    } else { // No receiptId in URL, means new receipt
+    } else { 
       resetToNewReceiptState();
       setIsLoading(false);
     }
   }, [receiptIdParam, resetToNewReceiptState]);
 
   useEffect(() => {
-    // This effect runs when existingReceiptId changes (e.g., set from URL param)
-    // OR when component mounts and existingReceiptId is already set (from URL)
-    if (existingReceiptId && clientIdParam) { // Only fetch if both IDs are available
+    if (existingReceiptId && clientIdParam) { 
       fetchReceipt();
-    } else if (!existingReceiptId && clientIdParam) { // New receipt for a client
+    } else if (!existingReceiptId && clientIdParam) { 
         resetToNewReceiptState();
         setIsLoading(false);
     }
@@ -241,7 +185,7 @@ function ReceiptDetailsContent() {
 
 
   const handleAddItem = () => {
-    if (!isEditMode && existingReceiptId) return; // Don't add if in view mode for existing receipt
+    if (!isEditMode && existingReceiptId) return; 
 
     setItems(prevItems => [
       ...prevItems,
@@ -250,20 +194,20 @@ function ReceiptDetailsContent() {
   };
 
   const handleRemoveItem = (sNoToRemove: number) => {
-    if (!isEditMode) return; // Can only remove in edit mode
+    if (!isEditMode) return; 
     if (items.length <= 1) {
       toast({variant: 'destructive', title: 'Cannot Remove', description: 'At least one item row is required.'});
       return;
     }
     const newItems = items
       .filter(item => item.sNo !== sNoToRemove)
-      .map((item, index) => ({...item, sNo: index + 1})); // Re-sequence sNo
+      .map((item, index) => ({...item, sNo: index + 1})); 
     setItems(newItems);
   };
 
 
   const handleInputChange = (index: number, field: keyof ReceiptItem, value: any) => {
-    if (!isEditMode) return; // Can only edit in edit mode
+    if (!isEditMode) return; 
 
     setItems(prevItems => {
       const newItems = [...prevItems];
@@ -275,9 +219,7 @@ function ReceiptDetailsContent() {
 
       const netWtValue = Math.max(0, grossWt - stoneWt);
       currentItem.netWt = netWtValue.toFixed(3);
-      // Use 100 for meltingTouch if it's 0 to avoid division by zero, effectively meaning no melting loss in that specific edge case.
-      // Or handle it as per business logic (e.g., if meltingTouch is 0, finalWt is also 0 or netWt). Here, assuming 100 if 0.
-      const effectiveMeltingTouch = meltingTouch === 0 ? 100 : meltingTouch; // Prevent division by zero
+      const effectiveMeltingTouch = meltingTouch === 0 ? 100 : meltingTouch; 
       currentItem.finalWt = ((netWtValue * effectiveMeltingTouch) / 100).toFixed(3);
       
       newItems[index] = currentItem;
@@ -288,32 +230,28 @@ function ReceiptDetailsContent() {
   const calculateTotal = (field: keyof Pick<ReceiptItem, 'grossWt' | 'stoneWt' | 'netWt' | 'finalWt' | 'stoneAmt'>) => {
     const validItems = items.filter(item => {
       const val = item[field];
-      // Ensure val is a string and represents a valid number before parsing
       return typeof val === 'string' && val.trim() !== '' && !isNaN(parseFloat(val));
     });
     return validItems.reduce((acc, item) => acc + (parseFloat(item[field]) || 0), 0);
   };
 
   const handleEditReceipt = () => {
-    // Save current state before entering edit mode
-    setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(items))}); // Deep copy
+    setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(items))}); 
     setIsEditMode(true);
   };
 
   const handleCancelEdit = () => {
-    if (initialState) { // If there was a state saved before editing
+    if (initialState) { 
       setDate(initialState.date);
       setMetal(initialState.metal);
       setWeight(initialState.weight);
       setWeightUnit(initialState.weightUnit);
-      setItems(JSON.parse(JSON.stringify(initialState.items))); // Deep copy
+      setItems(JSON.parse(JSON.stringify(initialState.items))); 
     } else {
-        // If no initial state (e.g. direct load into edit of an existing receipt, though unlikely with current flow)
-        // or if it was a new receipt and cancel is hit, re-fetch or reset
-        if (existingReceiptId) fetchReceipt(); // Re-fetch original if it was an existing receipt
-        else resetToNewReceiptState(); // Reset to blank if it was a new one
+        if (existingReceiptId) fetchReceipt(); 
+        else resetToNewReceiptState(); 
     }
-    setIsEditMode(false); // Exit edit mode
+    setIsEditMode(false); 
   };
 
 
@@ -330,7 +268,6 @@ function ReceiptDetailsContent() {
       toast({variant: 'destructive', title: 'Validation Error', description: 'Please select a metal type.'});
       return;
     }
-    // Filter out items that are completely empty to avoid saving blank rows
     const validItems = items.filter(item =>
       item.itemName.trim() !== '' || item.tag.trim() !== '' || item.grossWt.trim() !== '' ||
       item.stoneWt.trim() !== '' || item.meltingTouch.trim() !== '' || item.stoneAmt.trim() !== ''
@@ -342,82 +279,34 @@ function ReceiptDetailsContent() {
     }
 
     setIsSaving(true);
-    let toastIdInstance: string | undefined;
+    // TODO: Implement SQL data saving/updating here
+    // This logic will be significantly different for SQL.
+    // You'll need to interact with your SQL database client (e.g., Prisma).
+    // 1. Check if a receipt exists.
+    // 2. If exists, update. If not, insert.
+    console.warn(`Save operation for receipt not implemented. Waiting for SQL database setup.`);
+    toast({
+        title: "Save Operation Pending",
+        description: `Client receipt for ${clientNameParam} will be saved once SQL DB is configured.`,
+        variant: "default"
+    });
 
-    try {
-      toastIdInstance = toast({
-        title: existingReceiptId ? 'Updating Client Receipt...' : 'Creating Client Receipt...',
-        description: 'Please wait. If this is slow, check Firestore indexes for ClientReceipts. See firestore.indexes.md.',
-      }).id;
-
-      const totalGrossWt = validItems.reduce((acc, item) => acc + (parseFloat(item.grossWt) || 0), 0);
-      const totalStoneWt = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneWt) || 0), 0);
-      const totalNetWt = validItems.reduce((acc, item) => acc + (parseFloat(item.netWt) || 0), 0);
-      const totalFinalWt = validItems.reduce((acc, item) => acc + (parseFloat(item.finalWt) || 0), 0);
-      const totalStoneAmt = validItems.reduce((acc, item) => acc + (parseFloat(item.stoneAmt) || 0), 0);
-
-      const receiptData: ClientReceiptData = {
-        clientId: clientIdParam,
-        clientName: clientNameParam, // Persist clientName at time of receipt creation
-        shopName: clientShopName, // Persist shopName
-        phoneNumber: clientPhoneNumber, // Persist phone
-        metalType: metal,
-        issueDate: date.toISOString(), // Store date as ISO string
-        tableData: validItems.map(({sNo, ...item}) => ({ // Exclude sNo from persisted data
-          itemName: item.itemName || '',
-          tag: item.tag || '',
-          grossWt: item.grossWt || '0',
-          stoneWt: item.stoneWt || '0',
-          netWt: item.netWt || '0.000', // This is already calculated and stored in item state
-          meltingTouch: item.meltingTouch || '0',
-          finalWt: item.finalWt || '0.000', // This is already calculated
-          stoneAmt: item.stoneAmt || '0',
-        })),
-        totals: {
-          grossWt: parseFloat(totalGrossWt.toFixed(3)),
-          stoneWt: parseFloat(totalStoneWt.toFixed(3)),
-          netWt: parseFloat(totalNetWt.toFixed(3)),
-          finalWt: parseFloat(totalFinalWt.toFixed(3)),
-          stoneAmt: parseFloat(totalStoneAmt.toFixed(2)),
-        },
-        // createdAt and updatedAt will be handled by serverTimestamp by Firestore
-      };
-
-      if (existingReceiptId) {
-        await updateDoc(doc(db, 'ClientReceipts', existingReceiptId), {
-          ...receiptData,
-          updatedAt: serverTimestamp(), // Set/update updatedAt timestamp
-        });
-        toast.update(toastIdInstance, {title: 'Receipt Updated!', description: 'The client receipt has been saved successfully.'});
-      } else {
-        const newReceiptRef = await addDoc(collection(db, 'ClientReceipts'), {
-          ...receiptData,
-          createdAt: serverTimestamp(), // Set createdAt timestamp
-          updatedAt: serverTimestamp(), // Set updatedAt timestamp
-        });
-        setExistingReceiptId(newReceiptRef.id); // Update state with new ID
-        // Update URL to reflect new receipt ID without full page reload
-        router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${newReceiptRef.id}`, { scroll: false });
-        toast.update(toastIdInstance, {title: 'Receipt Created!', description: 'The client receipt has been saved successfully.'});
-      }
-      // Update initial state to reflect saved data, so "cancel" doesn't revert to pre-save
-      const savedItemsForInitialState = validItems.map((it, idx) => ({
-          ...it, sNo: idx + 1, // ensure sNo is present for UI
-          netWt: it.netWt, finalWt: it.finalWt, // ensure calculated values are correct
-      }));
-      setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(savedItemsForInitialState))});
-      setIsEditMode(false); // Exit edit mode after save
-    } catch (error) {
-      console.error('Error saving receipt:', error);
-      const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred.';
-      if (toastIdInstance) {
-        toast.update(toastIdInstance, {variant: 'destructive', title: 'Error Saving Receipt', description: `Failed to save client receipt. ${errorMsg} Ensure Firestore indexes are correct. See firestore.indexes.md.`});
-      } else {
-        toast({variant: 'destructive', title: 'Error Saving Receipt', description: `Failed to save client receipt. ${errorMsg} Ensure Firestore indexes are correct. See firestore.indexes.md.`});
-      }
-    } finally {
-      setIsSaving(false);
+    // Simulating a save for UI update
+    let tempExistingReceiptId = existingReceiptId;
+    if (!tempExistingReceiptId) {
+        tempExistingReceiptId = `temp_sql_id_${Date.now()}`; // Placeholder
+        setExistingReceiptId(tempExistingReceiptId);
+        router.replace(`/receipt/details?clientId=${clientIdParam}&clientName=${encodeURIComponent(clientNameParam)}&receiptId=${tempExistingReceiptId}`, { scroll: false });
     }
+    
+    const savedItemsForInitialState = validItems.map((it, idx) => ({
+        ...it, sNo: idx + 1, 
+        netWt: it.netWt, finalWt: it.finalWt, 
+    }));
+    setInitialState({date, metal, weight, weightUnit, items: JSON.parse(JSON.stringify(savedItemsForInitialState))});
+    setIsEditMode(false); 
+    toast({ title: 'Simulated Save', description: 'Client receipt data prepared. (SQL Save Pending)' });
+    setIsSaving(false);
   };
 
 
@@ -437,38 +326,34 @@ function ReceiptDetailsContent() {
     }
 
     const doc = new jsPDF();
-    // PDF Styling Constants
-    const primaryColor = '#000000'; // Black for text
-    const borderColor = '#B8860B'; // Dark Gold for border
-    const headerColor = '#FFF8DC'; // Cornsilk (Light Yellow) for table headers
-    const rowColor = '#FFFFFF'; // White for table rows
-    const alternateRowColor = '#FAF0E6'; // Linen (Very Light Beige) for alternate rows
+    const primaryColor = '#000000'; 
+    const borderColor = '#B8860B'; 
+    const headerColor = '#FFF8DC'; 
+    const rowColor = '#FFFFFF'; 
+    const alternateRowColor = '#FAF0E6'; 
     const titleFontSize = 20;
     const textFontSize = 10;
     const tableHeaderFontSize = 9;
     const tableBodyFontSize = 8;
-    const margin = 10; // Page margin
+    const margin = 10; 
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight(); // For border drawing
+    const pageHeight = doc.internal.pageSize.getHeight(); 
 
-    // --- Border ---
-    doc.setDrawColor(borderColor); // Set border color
-    doc.setLineWidth(0.5); // Set border width
-    doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin); // Draw border rect
+    doc.setDrawColor(borderColor); 
+    doc.setLineWidth(0.5); 
+    doc.rect(margin / 2, margin / 2, pageWidth - margin, pageHeight - margin); 
 
-    // --- Title ---
     doc.setFontSize(titleFontSize);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(primaryColor);
     const title = 'Goldsmith Receipt';
     const titleWidth = doc.getTextWidth(title);
-    doc.text(title, (pageWidth - titleWidth) / 2, margin + 10); // Centered title
+    doc.text(title, (pageWidth - titleWidth) / 2, margin + 10); 
 
-    // --- Client and Receipt Info ---
     doc.setFontSize(textFontSize);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(primaryColor);
-    let startY = margin + 25; // Initial Y position for text
+    let startY = margin + 25; 
     doc.text(`Name: ${clientNameParam || 'N/A'}`, margin + 5, startY);
     startY += 6;
     doc.text(`Date: ${date ? format(date, 'PPP') : 'N/A'}`, margin + 5, startY);
@@ -479,7 +364,6 @@ function ReceiptDetailsContent() {
     startY += 6;
     doc.text(`Metal Type: ${metal || 'N/A'}`, margin + 5, startY);
     startY += 6;
-    // Optional: Add overall weight if provided
     if (weight.trim() && weightUnit.trim()) {
         doc.text(`Overall Weight: ${weight} ${weightUnit}`, margin + 5, startY);
         startY +=6;
@@ -496,9 +380,9 @@ function ReceiptDetailsContent() {
       item.tag || '',
       item.grossWt ? parseFloat(item.grossWt).toFixed(3) : '0.000',
       item.stoneWt ? parseFloat(item.stoneWt).toFixed(3) : '0.000',
-      item.netWt ? parseFloat(item.netWt).toFixed(3) : '0.000', // Already toFixed(3) in state
+      item.netWt ? parseFloat(item.netWt).toFixed(3) : '0.000', 
       item.meltingTouch ? parseFloat(item.meltingTouch).toFixed(2) : '0.00',
-      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '0.000', // Already toFixed(3) in state
+      item.finalWt ? parseFloat(item.finalWt).toFixed(3) : '0.000', 
       item.stoneAmt ? parseFloat(item.stoneAmt).toFixed(2) : '0.00',
     ]);
 
@@ -512,14 +396,14 @@ function ReceiptDetailsContent() {
       head: [tableColumn],
       body: tableRows,
       startY: startY + 5,
-      theme: 'grid', // Use 'grid' for better visual separation
+      theme: 'grid', 
       headStyles: {
         fillColor: headerColor,
         textColor: primaryColor,
         fontStyle: 'bold',
         fontSize: tableHeaderFontSize,
         lineWidth: 0.1,
-        lineColor: borderColor, // Use border color for table lines
+        lineColor: borderColor, 
         halign: 'center'
       },
       bodyStyles: {
@@ -531,39 +415,38 @@ function ReceiptDetailsContent() {
         cellPadding: 1.5
       },
       alternateRowStyles: {fillColor: alternateRowColor},
-      footStyles: { // Styles for the footer row
+      footStyles: { 
         fillColor: headerColor,
         textColor: primaryColor,
         fontStyle: 'bold',
         fontSize: tableHeaderFontSize,
         lineWidth: 0.1,
         lineColor: borderColor,
-        halign: 'right' // Align footer text to right by default
+        halign: 'right' 
       },
-      tableLineColor: borderColor, // Main table border color
+      tableLineColor: borderColor, 
       tableLineWidth: 0.1,
-      margin: {left: margin + 2, right: margin + 2}, // Slightly smaller margin for table
-      didParseCell: (data) => { // Custom cell styling
-        const numericColumns = [0, 3, 4, 5, 6, 7, 8]; // S.No also centered
+      margin: {left: margin + 2, right: margin + 2}, 
+      didParseCell: (data) => { 
+        const numericColumns = [0, 3, 4, 5, 6, 7, 8]; 
         if (data.column.index === 0 && (data.section === 'body' || data.section === 'foot')) {
             data.cell.styles.halign = 'center';
         } else if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
-            data.cell.styles.halign = 'right'; // Right align numeric data
+            data.cell.styles.halign = 'right'; 
         }
-         // Ensure 'Total' label in foot is right-aligned before numbers
-        if (data.section === 'foot' && data.column.index === 1) { // 'Item Name' column index for 'Total' label
+        if (data.section === 'foot' && data.column.index === 1) { 
             data.cell.styles.halign = 'right';
         }
       },
-      showFoot: 'lastPage', // Show footer on the last page if table spans multiple
-      foot: [ // Define the footer row content
-        [ // Array for the single footer row
-          {content: '', styles: {halign: 'center'}}, // Empty for S.No.
-          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}}, // 'Total' label
+      showFoot: 'lastPage', 
+      foot: [ 
+        [ 
+          {content: '', styles: {halign: 'center'}}, 
+          {content: 'Total', colSpan: 2, styles: {fontStyle: 'bold', halign: 'right'}}, 
           {content: totalGrossWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalStoneWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalNetWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
-          {content: '', styles: {halign: 'right'}}, // Empty for M/T
+          {content: '', styles: {halign: 'right'}}, 
           {content: totalFinalWtPdf.toFixed(3), styles: {fontStyle: 'bold', halign: 'right'}},
           {content: totalStoneAmtPdf.toFixed(2), styles: {fontStyle: 'bold', halign: 'right'}},
         ],
@@ -579,21 +462,21 @@ function ReceiptDetailsContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center h-screen">
-          <p>Loading receipt details... If slow, check Firestore indexes for 'ClientReceipts'. See firestore.indexes.md.</p>
+          <p>Loading receipt details... Waiting for SQL database configuration.</p>
         </div>
       </Layout>
     );
   }
   
-  const mainCardClasses = "w-full mx-auto px-0 py-0"; // Max width for the main card, remove horizontal padding
-  const contentPadding = "p-2 md:p-3"; // Reduced padding for content within card
+  const mainCardClasses = "w-full mx-auto px-0 py-0"; 
+  const contentPadding = "p-2 md:p-3"; 
 
   return (
     <Layout>
       <div className={`flex flex-col justify-start min-h-screen bg-secondary ${contentPadding}`}>
         <Card className={mainCardClasses}>
           <CardHeader className={`space-y-1 ${contentPadding} pb-2`}>
-             <CardDescription>Ensure Firestore indexes are set up on `ClientReceipts` (e.g., on `createdAt`) for optimal performance. See firestore.indexes.md.</CardDescription>
+             <CardDescription>Client receipt data will be stored in SQL database once configured.</CardDescription>
             <div className="flex flex-wrap justify-between items-center gap-2">
               <div>
                 <CardTitle className="text-xl md:text-2xl">Client Receipt</CardTitle>
@@ -616,7 +499,7 @@ function ReceiptDetailsContent() {
                     <Button onClick={handleSaveReceipt} disabled={isSaving} size="sm">
                       <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (existingReceiptId ? 'Save Changes' : 'Create Receipt')}
                     </Button>
-                    {existingReceiptId && isEditMode && ( // Show cancel only if editing an existing receipt
+                    {existingReceiptId && isEditMode && ( 
                        <Button variant="outline" onClick={handleCancelEdit} disabled={isSaving} size="sm">
                          <XCircle className="mr-2 h-4 w-4" /> Cancel Edit
                        </Button>
@@ -682,16 +565,16 @@ function ReceiptDetailsContent() {
               <h3 className="text-lg font-medium mb-2">Receipt Items</h3>
               <table className="w-full border border-collapse border-border">
                 <colgroup>
-                    <col style={{ width: '4%' }} />  {/* S.No. */}
-                    <col style={{ width: 'auto' }} /> {/* Item Name - flexible width */}
-                    <col style={{ width: '10%' }} /> {/* Tag */}
-                    <col style={{ width: '12%' }} /> {/* Gross (wt) */}
-                    <col style={{ width: '12%' }} /> {/* Stone (wt) */}
-                    <col style={{ width: '10%' }} /> {/* Net (wt) - Readonly */}
-                    <col style={{ width: '10%' }} /> {/* M/T (%) */}
-                    <col style={{ width: '10%' }} /> {/* Final (wt) - Readonly */}
-                    <col style={{ width: '12%' }} /> {/* Stone Amt */}
-                    <col style={{ width: '7%' }} />  {/* Action */}
+                    <col style={{ width: '4%' }} />  
+                    <col style={{ width: 'auto' }} /> 
+                    <col style={{ width: '10%' }} /> 
+                    <col style={{ width: '12%' }} /> 
+                    <col style={{ width: '12%' }} /> 
+                    <col style={{ width: '10%' }} /> 
+                    <col style={{ width: '10%' }} /> 
+                    <col style={{ width: '10%' }} /> 
+                    <col style={{ width: '12%' }} /> 
+                    <col style={{ width: '7%' }} />  
                 </colgroup>
                 <thead>
                   <tr className="bg-muted">

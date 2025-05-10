@@ -3,7 +3,7 @@
 import type { ChangeEvent } from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { doc, getDoc, Timestamp, DocumentData } from 'firebase/firestore';
+// import { doc, getDoc, Timestamp, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, isValid, parseISO } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -12,13 +12,14 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+// import { db } from '@/lib/firebase'; // Firebase removed
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
+// Keep interfaces for data structure, will be mapped from SQL later
 interface GivenItemFirestore {
   productName: string;
   pureWeight: string;
@@ -58,8 +59,8 @@ interface AdminReceiptData {
   given: GivenData | null;
   received: ReceivedData | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Timestamp; 
-  updatedAt: Timestamp; 
+  createdAt: Date; // Changed from Timestamp
+  updatedAt: Date; // Changed from Timestamp
 }
 
 const getDisplayValue = (value: string | number | undefined | null, decimals = 3): string => {
@@ -99,30 +100,24 @@ function AdminBillViewContent() {
         return;
       }
       setLoading(true);
-      try {
-        const receiptRef = doc(db, 'AdminReceipts', receiptId);
-        const docSnap = await getDoc(receiptRef);
-
-        if (docSnap.exists()) {
-           const data = docSnap.data() as AdminReceiptData;
-           setReceiptData({
-             ...data,
-             createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
-             updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(),
-           });
-           setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
-           setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
-        } else {
-          toast({ variant: "destructive", title: "Not Found", description: `Admin receipt with ID ${receiptId} not found.` });
-          router.push('/admin-bill');
-        }
-      } catch (error) {
-        console.error("Error fetching admin receipt:", error);
-        toast({ variant: "destructive", title: "Error Loading Admin Receipt", description: "Could not load receipt details. Check Firestore setup, console, and ensure 'AdminReceipts' indexes are correct." });
-         router.push('/admin-bill');
-      } finally {
-        setLoading(false);
-      }
+      // TODO: Implement SQL data fetching for the specific receipt
+      // Example: const data = await fetchAdminReceiptFromSQL(receiptId);
+      // if (data) {
+      //   setReceiptData(data);
+      //   setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
+      //   setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
+      // } else {
+      //   toast({ variant: "destructive", title: "Not Found", description: `Admin receipt with ID ${receiptId} not found.` });
+      //   router.push('/admin-bill');
+      // }
+      console.warn(`Data fetching for receipt ID ${receiptId} not implemented. Waiting for SQL database setup.`);
+      toast({
+          title: "Data Fetching Pending",
+          description: `Details for admin receipt ${receiptId} will be loaded once SQL DB is configured.`,
+          variant: "default"
+      });
+      setReceiptData(null); // Initialize with null
+      setLoading(false);
     };
 
     fetchReceipt();
@@ -191,7 +186,7 @@ function AdminBillViewContent() {
         doc.setTextColor(primaryColor);
         doc.text(`Client Name: ${receiptData.clientName || 'N/A'}`, margin + 5, startY);
         startY += 6;
-        const receiptCreationDate = receiptData.createdAt?.toDate();
+        const receiptCreationDate = receiptData.createdAt; // Already a Date object
         if (receiptCreationDate && isValid(receiptCreationDate)) {
             doc.text(`Receipt Date: ${format(receiptCreationDate, 'PPP p')}`, margin + 5, startY);
             startY += 6;
@@ -235,12 +230,11 @@ function AdminBillViewContent() {
                 tableLineWidth: 0.1,
                 margin: { left: margin + 5, right: margin + 5 },
                 didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5]; // Columns for Pure Weight, Pure %, Melting, Total
+                     const numericColumns = [2, 3, 4, 5]; 
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
-                     // Ensure "Total" label in foot is right-aligned
-                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { // First cell of foot
+                     if (data.section === 'foot' && data.row.index === 0 && data.column.index === 0) { 
                          data.cell.styles.halign = 'right';
                      }
                  },
@@ -273,7 +267,7 @@ function AdminBillViewContent() {
                  { content: getDisplayValue(receiptData.received.totalOrnamentsWt, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalStoneWeight, 3), styles: { fontStyle: 'bold', halign: 'right' } },
                  { content: getDisplayValue(receiptData.received.totalSubTotal, 3), styles: { fontStyle: 'bold', halign: 'right' } },
-                 '', // For Making Charge %
+                 '', 
                  { content: getDisplayValue(receiptData.received.total, 3), styles: { fontStyle: 'bold', halign: 'right' } }
              ];
 
@@ -291,7 +285,7 @@ function AdminBillViewContent() {
                  tableLineWidth: 0.1,
                  margin: { left: margin + 5, right: margin + 5 },
                   didParseCell: (data) => {
-                     const numericColumns = [2, 3, 4, 5, 6]; // Columns for Ornaments Wt, Stone Wt, Sub Total, Making Charge %, Total
+                     const numericColumns = [2, 3, 4, 5, 6]; 
                      if ((data.section === 'body' || data.section === 'foot') && numericColumns.includes(data.column.index)) {
                          data.cell.styles.halign = 'right';
                      }
@@ -319,18 +313,18 @@ function AdminBillViewContent() {
 
         autoTable(doc, {
            startY: startY,
-           theme: 'plain', // Use plain theme for simple key-value display
+           theme: 'plain', 
            body: [
              ['Given Total:', getDisplayValue(finalGivenTotal, 3)],
              [`Received Total: (${operationText})`, getDisplayValue(finalReceivedTotal, 3)],
              ['Result:', { content: finalResult, styles: { fontStyle: 'bold' } }],
            ],
-           columnStyles: { // Align text properly
-             0: { halign: 'right', cellWidth: 40 }, // Label column
-             1: { halign: 'right', cellWidth: 40 }, // Value column
+           columnStyles: { 
+             0: { halign: 'right', cellWidth: 40 }, 
+             1: { halign: 'right', cellWidth: 40 }, 
            },
-           margin: { left: pageWidth - margin - 5 - 80 }, // Position to the right
-           tableWidth: 80, // Fixed width for the summary table
+           margin: { left: pageWidth - margin - 5 - 80 }, 
+           tableWidth: 80, 
            styles: { fontSize: textFontSize },
            didDrawPage: (data) => { startY = data.cursor?.y ?? startY; }
         });
@@ -348,7 +342,7 @@ function AdminBillViewContent() {
 
         const addCompanyName = (currentY: number) => {
             let yPos = currentY;
-            if (yPos + companyLineHeight * 2 > pageHeight - margin - 30) { // Check for page overflow
+            if (yPos + companyLineHeight * 2 > pageHeight - margin - 30) { 
                 doc.addPage();
                 yPos = margin + 20; 
                 doc.setDrawColor(borderColor);
@@ -374,7 +368,7 @@ function AdminBillViewContent() {
     return (
       <Layout>
         <div className="flex justify-center items-center min-h-screen">
-          <p>Loading admin receipt view... If slow, check Firestore setup and indexes for 'AdminReceipts'.</p>
+          <p>Loading admin receipt view... Waiting for SQL database configuration.</p>
         </div>
       </Layout>
     );

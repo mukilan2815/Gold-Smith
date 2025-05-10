@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+// import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore'; // Firebase removed
+// import { db } from '@/lib/firebase'; // Firebase removed
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
 
@@ -18,7 +18,7 @@ interface Client {
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: Timestamp;
+  createdAt?: Date; // Changed from Timestamp
 }
 
 export default function AdminReceiptSelectPage() {
@@ -44,26 +44,17 @@ function AdminReceiptSelectContent() {
 
   const fetchClients = useCallback(async () => {
      setLoading(true);
-     try {
-       const clientsRef = collection(db, 'ClientDetails');
-       // Querying by 'createdAt' (desc) requires an index.
-       const q = query(clientsRef, orderBy('createdAt', 'desc'), limit(50));
-       const querySnapshot = await getDocs(q);
-       const fetchedClients: Client[] = [];
-       querySnapshot.forEach((doc) => {
-         fetchedClients.push({ id: doc.id, ...(doc.data() as Omit<Client, 'id'>) });
-       });
-       setClients(fetchedClients);
-     } catch (error) {
-       console.error("Error fetching clients for Admin Receipt from Firestore:", error);
-       toast({ 
-         variant: "destructive", 
-         title: "Error Fetching Clients", 
-         description: "Could not load clients for Admin Receipt. This is often due to missing Firestore indexes. Please ensure an index on 'ClientDetails' collection for 'createdAt' field (descending) exists. Check console and firestore.indexes.md." 
-        });
-     } finally {
-       setLoading(false);
-     }
+     // TODO: Implement SQL data fetching for clients
+     // Example: const fetchedClients = await fetchClientsFromSQL();
+     // setClients(fetchedClients);
+     console.warn("Client data fetching not implemented. Waiting for SQL database setup.");
+     toast({
+         title: "Data Fetching Pending",
+         description: "Client list will be loaded once the SQL database is configured.",
+         variant: "default"
+     });
+     setClients([]); // Initialize with empty array
+     setLoading(false);
    }, [toast]); 
 
   useEffect(() => {
@@ -93,7 +84,7 @@ function AdminReceiptSelectContent() {
       <Card className="w-full max-w-4xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Admin Receipt - Select Client</CardTitle>
-          <CardDescription>Filter and select a client. Slow loading? Check Firestore index for 'ClientDetails' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
+          <CardDescription>Filter and select a client. Client data will be loaded from SQL database once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -104,7 +95,7 @@ function AdminReceiptSelectContent() {
           <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading clients... If this is slow, ensure a Firestore index on 'ClientDetails' for 'createdAt' (descending) is active. Refer to firestore.indexes.md.
+                Loading clients... Please wait for SQL database configuration.
               </p>
             ) : filteredClients.length > 0 ? (
               <ul className="space-y-3">
@@ -123,7 +114,7 @@ function AdminReceiptSelectContent() {
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No clients found. If clients exist and are not showing, or if loading is slow, check Firestore indexes for 'ClientDetails' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
+              <p className="text-muted-foreground text-center">No clients found. Waiting for SQL database configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

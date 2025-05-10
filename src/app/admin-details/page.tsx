@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore';
+// import { collection, getDocs, query, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,10 +11,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+// import { db } from '@/lib/firebase'; // Firebase removed
 import { ArrowLeft } from 'lucide-react';
 
-// Firestore data structure (matching AdminReceipts definition)
+// Keep interfaces for data structure, will be mapped from SQL later
 interface GivenItemFirestore {
   productName: string;
   pureWeight: string;
@@ -33,14 +33,14 @@ interface ReceivedItemFirestore {
 }
 
 interface GivenData {
-  date: string | null; // ISO string
+  date: string | null; 
   items: GivenItemFirestore[];
   totalPureWeight: number;
   total: number;
 }
 
 interface ReceivedData {
-  date: string | null; // ISO string
+  date: string | null; 
   items: ReceivedItemFirestore[];
   totalOrnamentsWt: number;
   totalStoneWeight: number;
@@ -55,8 +55,8 @@ interface AdminReceipt {
   given: GivenData | null;
   received: ReceivedData | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Date; // Changed from Timestamp
+  updatedAt: Date; // Changed from Timestamp
 }
 
 const getDisplayValue = (value: string | number | undefined | null, decimals = 3): string => {
@@ -81,36 +81,17 @@ function AdminDetailsListContent() {
 
   const fetchAdminReceipts = useCallback(async () => {
     setLoading(true);
-    try {
-      const receiptsRef = collection(db, 'AdminReceipts');
-      // Querying by 'createdAt' (desc) requires an index.
-      const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50));
-      const querySnapshot = await getDocs(q);
-      const fetchedReceipts: AdminReceipt[] = [];
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data() as DocumentData; // Use DocumentData
-        fetchedReceipts.push({
-          id: docSnap.id,
-          clientId: data.clientId || '',
-          clientName: data.clientName || 'Unknown Client',
-          given: data.given || null, // Assuming structure matches GivenData or null
-          received: data.received || null, // Assuming structure matches ReceivedData or null
-          status: data.status || 'empty',
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(),
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(),
-        } as AdminReceipt); // Casting to AdminReceipt
-      });
-      setReceipts(fetchedReceipts);
-    } catch (error) {
-      console.error("Error fetching admin receipts for details page:", error);
-      toast({ 
-        variant: "destructive", 
-        title: "Error Fetching Admin Receipts", 
-        description: "Could not load admin receipts. This often means a Firestore index is missing. Please ensure an index on 'AdminReceipts' collection for 'createdAt' field (descending) exists. Check console and firestore.indexes.md."
-      });
-    } finally {
-      setLoading(false);
-    }
+    // TODO: Implement SQL data fetching here
+    // Example: const fetchedReceipts = await fetchAllAdminReceiptsFromSQL();
+    // setReceipts(fetchedReceipts);
+    console.warn("Data fetching not implemented. Waiting for SQL database setup.");
+    toast({
+        title: "Data Fetching Pending",
+        description: "Admin receipt details will be loaded once the SQL database is configured.",
+        variant: "default"
+    });
+    setReceipts([]); // Initialize with empty array
+    setLoading(false);
   }, [toast]);
 
   useEffect(() => {
@@ -136,13 +117,13 @@ function AdminDetailsListContent() {
           </Button>
         </CardHeader>
         <CardDescription className="px-6 pb-4">
-            This page displays details of all admin receipts. Slow loading? Check Firestore index for 'AdminReceipts' on 'createdAt' (descending). See firestore.indexes.md.
+            This page displays details of all admin receipts. Data will be loaded from the SQL database once configured.
         </CardDescription>
       </Card>
 
       {loading ? (
         <div className="text-center py-10">
-          <p className="text-muted-foreground">Loading admin receipts... If slow, ensure Firestore index for 'AdminReceipts' on 'createdAt' (descending) is active. Refer to firestore.indexes.md.</p>
+          <p className="text-muted-foreground">Loading admin receipts... Please wait for SQL database configuration.</p>
         </div>
       ) : receipts.length > 0 ? (
         <ScrollArea className="h-[calc(100vh-220px)]">
@@ -159,7 +140,7 @@ function AdminDetailsListContent() {
                   <div className="flex justify-between items-start">
                     <div>
                       <CardTitle className="text-lg">{receipt.clientName}</CardTitle>
-                      <CardDescription>Receipt ID: {receipt.id.substring(0,10)}...<br />Last Updated: {format(receipt.updatedAt.toDate(), 'PPP p')}</CardDescription>
+                      <CardDescription>Receipt ID: {receipt.id.substring(0,10)}...<br />Last Updated: {format(receipt.updatedAt, 'PPP p')}</CardDescription>
                     </div>
                     <Badge variant={getStatusVariant(receipt.status)} className="capitalize">{receipt.status}</Badge>
                   </div>
@@ -252,7 +233,7 @@ function AdminDetailsListContent() {
           </div>
         </ScrollArea>
       ) : (
-        <p className="text-muted-foreground text-center py-10">No admin receipts found. If receipts exist but are not showing, or if loading is slow, check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
+        <p className="text-muted-foreground text-center py-10">No admin receipts found. Waiting for SQL database configuration.</p>
       )}
     </div>
   );

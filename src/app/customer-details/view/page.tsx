@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore';
+// import { doc, getDoc, collection, query, where, getDocs, orderBy, Timestamp, limit, DocumentData } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+// import { db } from '@/lib/firebase'; // Firebase removed
 import { ArrowLeft, Eye } from 'lucide-react';
 
 interface Client {
@@ -18,15 +18,15 @@ interface Client {
   clientName: string;
   phoneNumber: string;
   address: string;
-  createdAt?: Timestamp;
+  createdAt?: Date; // Changed from Timestamp
 }
 
 interface ClientReceipt {
   id: string;
   clientId: string;
-  clientName: string; // Persisted on receipt
+  clientName: string; 
   metalType: string;
-  issueDate: string; // ISO string
+  issueDate: string; 
   totals: {
     grossWt: number;
     netWt: number;
@@ -34,7 +34,7 @@ interface ClientReceipt {
     stoneAmt: number;
     stoneWt?: number;
   };
-  createdAt?: Timestamp;
+  createdAt?: Date; // Changed from Timestamp
 }
 
 export default function ViewCustomerDetailsPage() {
@@ -64,22 +64,17 @@ function ViewCustomerDetailsContent() {
       return;
     }
     setLoadingClient(true);
-    try {
-      const clientRef = doc(db, 'ClientDetails', clientId);
-      const docSnap = await getDoc(clientRef);
-      if (docSnap.exists()) {
-        setClient({ id: docSnap.id, ...(docSnap.data() as Omit<Client, 'id'>) });
-      } else {
-        toast({ variant: "destructive", title: "Not Found", description: `Client with ID ${clientId} not found.` });
-        router.push('/customer-details');
-      }
-    } catch (error) {
-      console.error("Error fetching client details:", error);
-      toast({ variant: "destructive", title: "Error Loading Client", description: "Could not load client details. Check Firestore setup, console, and relevant indexes for 'ClientDetails'. See firestore.indexes.md." });
-      router.push('/customer-details');
-    } finally {
-      setLoadingClient(false);
-    }
+    // TODO: Implement SQL data fetching for client details
+    // Example: const clientData = await fetchClientFromSQL(clientId);
+    // if (clientData) setClient(clientData); else router.push('/customer-details');
+    console.warn(`Client details fetching for ID ${clientId} not implemented. Waiting for SQL database setup.`);
+    toast({
+        title: "Data Fetching Pending",
+        description: `Client details for ${clientId} will be loaded once SQL DB is configured.`,
+        variant: "default"
+    });
+    setClient(null); // Initialize with null
+    setLoadingClient(false);
   }, [clientId, router, toast]);
 
   const fetchClientReceipts = useCallback(async () => {
@@ -88,40 +83,17 @@ function ViewCustomerDetailsContent() {
       return;
     }
     setLoadingReceipts(true);
-    try {
-      const receiptsRef = collection(db, 'ClientReceipts');
-      // This query is critical and needs a composite index: (clientId ==, createdAt desc)
-      const q = query(
-        receiptsRef,
-        where('clientId', '==', clientId),
-        orderBy('createdAt', 'desc'),
-        limit(50)
-      );
-      const querySnapshot = await getDocs(q);
-      const fetchedReceipts: ClientReceipt[] = [];
-      querySnapshot.forEach((docSnap) => { // Renamed doc to docSnap
-        const data = docSnap.data() as DocumentData;
-        fetchedReceipts.push({ 
-            id: docSnap.id, 
-            clientId: data.clientId || '',
-            clientName: data.clientName || 'N/A',
-            metalType: data.metalType || 'N/A',
-            issueDate: data.issueDate || '', // Expecting ISO string
-            totals: data.totals || { grossWt: 0, netWt: 0, finalWt: 0, stoneAmt: 0, stoneWt: 0 },
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt : undefined,
-        } as ClientReceipt);
-      });
-      setReceipts(fetchedReceipts);
-    } catch (error) {
-      console.error("Error fetching client receipts:", error);
-      toast({ 
-        variant: "destructive", 
-        title: "Error Fetching Client Receipts", 
-        description: "Could not load receipts. CRITICAL: A composite Firestore index on 'ClientReceipts' for (clientId ASC, createdAt DESC) is ESSENTIAL for this page. Please create it. Check console and firestore.indexes.md."
-      });
-    } finally {
-      setLoadingReceipts(false);
-    }
+    // TODO: Implement SQL data fetching for client's receipts
+    // Example: const fetchedReceipts = await fetchReceiptsForClientFromSQL(clientId);
+    // setReceipts(fetchedReceipts);
+     console.warn(`Client receipts fetching for client ID ${clientId} not implemented. Waiting for SQL database setup.`);
+    toast({
+        title: "Data Fetching Pending",
+        description: `Receipts for client ${clientId} will be loaded once SQL DB is configured.`,
+        variant: "default"
+    });
+    setReceipts([]); // Initialize with empty array
+    setLoadingReceipts(false);
   }, [clientId, toast]);
 
   useEffect(() => {
@@ -135,7 +107,7 @@ function ViewCustomerDetailsContent() {
 
   if (loadingClient) {
     return (
-      <Layout><div className="flex justify-center items-center min-h-screen p-4"><p>Loading client details... If slow, check Firestore indexes for 'ClientDetails'. See firestore.indexes.md.</p></div></Layout>
+      <Layout><div className="flex justify-center items-center min-h-screen p-4"><p>Loading client details... Waiting for SQL database configuration.</p></div></Layout>
     );
   }
 
@@ -164,18 +136,18 @@ function ViewCustomerDetailsContent() {
           <CardContent>
             <p><strong>Phone:</strong> {client.phoneNumber || 'N/A'}</p>
             <p><strong>Address:</strong> {client.address || 'N/A'}</p>
-            {client.createdAt && (<p className="text-sm text-muted-foreground">Client Since: {format(client.createdAt.toDate(), 'PPP')}</p>)}
+            {client.createdAt && (<p className="text-sm text-muted-foreground">Client Since: {format(client.createdAt, 'PPP')}</p>)}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Client Receipts for {client.clientName}</CardTitle>
-            <CardDescription>Slow loading? CRITICAL: Ensure Firestore composite index on 'ClientReceipts' (clientId ASC, createdAt DESC) is active. See firestore.indexes.md.</CardDescription>
+            <CardDescription>Receipts will be loaded from SQL database once configured.</CardDescription>
           </CardHeader>
           <CardContent>
             {loadingReceipts ? (
-              <p className="text-muted-foreground text-center">Loading receipts... This requires a specific Firestore composite index for 'ClientReceipts' (clientId ASC, createdAt DESC). Performance will be poor without it. See firestore.indexes.md.</p>
+              <p className="text-muted-foreground text-center">Loading receipts... Waiting for SQL database configuration.</p>
             ) : receipts.length > 0 ? (
               <ScrollArea className="h-[40vh] w-full rounded-md border">
                 <ul className="p-4 space-y-3">
@@ -198,7 +170,7 @@ function ViewCustomerDetailsContent() {
                 </ul>
               </ScrollArea>
             ) : (
-              <p className="text-muted-foreground text-center">No receipts found for this client. If receipts exist and are not showing, or loading is slow, check the critical composite index for 'ClientReceipts' (clientId ASC, createdAt DESC). See firestore.indexes.md.</p>
+              <p className="text-muted-foreground text-center">No receipts found for this client. Waiting for SQL database configuration.</p>
             )}
           </CardContent>
         </Card>

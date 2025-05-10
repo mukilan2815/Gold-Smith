@@ -1,10 +1,10 @@
 'use client';
 
 import Layout from '@/components/Layout';
-import {useState} from 'react';
-import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
-import {Textarea} from '@/components/ui/textarea';
+import {useState}from 'react';
+import {Button}from '@/components/ui/button';
+import {Input}from '@/components/ui/input';
+import {Textarea}from '@/components/ui/textarea';
 import {
   Card,
   CardContent,
@@ -12,9 +12,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {useToast} from '@/hooks/use-toast';
-import {collection, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import {db} from '@/lib/firebase';
+import {useToast}from '@/hooks/use-toast';
+// import {collection, doc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Firebase removed
+// import {db}from '@/lib/firebase'; // Firebase removed
 
 export default function NewClientPage() {
   return (
@@ -45,50 +45,34 @@ function NewClientContent() {
     setIsSaving(true);
     const savingToast = toast({
       title: 'Saving Client...',
-      description: 'Please wait. If this process is slow, ensure a Firestore index is configured for the "ClientDetails" collection on the "createdAt" field (descending). See firestore.indexes.md.',
+      description: 'Please wait. Data will be saved to SQL database once configured.',
     });
 
-    const originalShopName = shopName;
-    const originalClientName = clientName;
-    const originalPhoneNumber = phoneNumber;
-    const originalAddress = address;
+    // TODO: Implement SQL data saving for new client
+    // Example: 
+    // const newClientData = {
+    //   shopName: shopName.trim(),
+    //   clientName: clientName.trim(),
+    //   phoneNumber: phoneNumber.trim(),
+    //   address: address.trim(),
+    //   createdAt: new Date(), // Or handle timestamp in SQL
+    // };
+    // const result = await saveClientToSQL(newClientData);
+    // if (result.success) { ... } else { ... }
 
-    try {
-      const newClientRef = doc(collection(db, 'ClientDetails'));
-      const newClientData = {
-        shopName: shopName.trim(),
-        clientName: clientName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        address: address.trim(),
-        createdAt: serverTimestamp() as Timestamp, // Firestore will set this on the server
-      };
-
-      await setDoc(newClientRef, newClientData);
-
-      setShopName('');
-      setClientName('');
-      setPhoneNumber('');
-      setAddress('');
-      
-      toast.update(savingToast.id, { 
-        title: 'Client Saved!',
-        description: `${newClientData.clientName}'s details saved successfully. ID: ${newClientRef.id}`,
-      });
-
-    } catch (error: any) {
-      console.error('Error adding client to Firestore: ', error);
-      toast.update(savingToast.id, { 
-        variant: 'destructive',
-        title: 'Save Error',
-        description: `Could not save client. Ensure your Firestore database is correctly set up and check console for details. Error: ${error.message || 'Unknown error'}.`,
-      });
-      setShopName(originalShopName);
-      setClientName(originalClientName);
-      setPhoneNumber(originalPhoneNumber);
-      setAddress(originalAddress);
-    } finally {
-      setIsSaving(false);
-    }
+    console.warn("Client saving not implemented. Waiting for SQL database setup.");
+    // Simulate save for UI update
+    setTimeout(() => {
+        setShopName('');
+        setClientName('');
+        setPhoneNumber('');
+        setAddress('');
+        toast.update(savingToast.id, { 
+            title: 'Client Data Prepared (SQL Save Pending)!',
+            description: `${clientName.trim()}'s details prepared. Actual save to SQL database pending configuration.`,
+        });
+        setIsSaving(false);
+    }, 1500); // Simulate delay
   };
 
   return (
@@ -96,7 +80,7 @@ function NewClientContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
-          <CardDescription>Enter client details. Slow saving? Check Firestore indexes for 'ClientDetails' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
+          <CardDescription>Enter client details. Data will be saved to SQL database once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">

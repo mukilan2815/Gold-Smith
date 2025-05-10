@@ -1,25 +1,25 @@
 'use client';
 
 import type { ChangeEvent} from 'react';
-import {useState, useEffect, useCallback} from 'react';
+import {useState, useEffect, useCallback}from 'react';
 import {useRouter}from 'next/navigation';
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  deleteDoc,
-  doc,
-  Timestamp,
-  limit,
-  DocumentData, // Added DocumentData
-} from 'firebase/firestore';
+// import {
+//   collection,
+//   getDocs,
+//   query,
+//   orderBy,
+//   deleteDoc,
+//   doc,
+//   Timestamp,
+//   limit,
+//   DocumentData, 
+// } from 'firebase/firestore'; // Firebase removed
 import {format, parseISO, isValid } from 'date-fns';
 import {Calendar as CalendarIcon, Trash2, Eye} from 'lucide-react';
 
 import Layout from '@/components/Layout';
 import {Button, buttonVariants} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
+import {Input}from '@/components/ui/input';
 import {
   Card,
   CardContent,
@@ -27,9 +27,9 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import {ScrollArea} from '@/components/ui/scroll-area';
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import {Calendar} from '@/components/ui/calendar';
+import {ScrollArea}from '@/components/ui/scroll-area';
+import {Popover, PopoverContent, PopoverTrigger}from '@/components/ui/popover';
+import {Calendar}from '@/components/ui/calendar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,8 +40,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {cn} from '@/lib/utils';
-import {db}from '@/lib/firebase';
+import {cn}from '@/lib/utils';
+// import {db}from '@/lib/firebase'; // Firebase removed
 import {useToast}from '@/hooks/use-toast';
 import {useDebounce}from '@/hooks/use-debounce';
 
@@ -52,16 +52,16 @@ interface ClientReceipt {
   shopName?: string;
   phoneNumber?: string;
   metalType: string;
-  issueDate: string; // Stored as ISO string
-  tableData: any[]; // Simplified for listing, detailed structure in details page
+  issueDate: string; 
+  tableData: any[]; 
   totals: {
     grossWt: number;
     netWt: number;
     finalWt: number;
     stoneAmt: number;
-    stoneWt?: number; // Added optional stoneWt as it's in new structure
+    stoneWt?: number; 
   };
-  createdAt?: Timestamp; // Firestore Timestamp
+  createdAt?: Date; // Changed from Timestamp
 }
 
 export default function ClientBillListPage() {
@@ -90,39 +90,17 @@ function ClientBillListContent() {
 
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
-    try {
-      const receiptsRef = collection(db, 'ClientReceipts');
-      // Querying by 'createdAt' (desc) requires an index.
-      const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50));
-      const querySnapshot = await getDocs(q);
-      const fetchedReceipts: ClientReceipt[] = [];
-      querySnapshot.forEach(docSnap => { // Renamed doc to docSnap for clarity
-        const data = docSnap.data() as DocumentData; // Use DocumentData
-        // issueDate is stored as ISO string, no complex parsing needed here for list display
-        // createdAt should be a Firestore Timestamp
-        fetchedReceipts.push({
-          id: docSnap.id,
-          clientId: data.clientId || '',
-          clientName: data.clientName || 'Unknown Client',
-          shopName: data.shopName || '',
-          phoneNumber: data.phoneNumber || '',
-          metalType: data.metalType || 'N/A',
-          issueDate: data.issueDate || '', // Expecting ISO string
-          tableData: data.tableData || [],
-          totals: data.totals || { grossWt: 0, netWt: 0, finalWt: 0, stoneAmt: 0, stoneWt: 0 },
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt : undefined,
-        } as ClientReceipt); // Casting to ClientReceipt
-      });
-      setReceipts(fetchedReceipts);
-    } catch (error) {
-      console.error('Error fetching client receipts:', error);
-      toast({
-        variant: 'destructive', title: 'Error Fetching Client Receipts',
-        description: "Could not load receipts. This often means a Firestore index is missing. Please ensure an index on 'ClientReceipts' collection for 'createdAt' field (descending) exists. Check console and firestore.indexes.md.",
-      });
-    } finally {
-      setLoading(false);
-    }
+    // TODO: Implement SQL data fetching for client receipts
+    // Example: const fetchedReceipts = await fetchClientReceiptsFromSQL();
+    // setReceipts(fetchedReceipts);
+    console.warn("Client receipts fetching not implemented. Waiting for SQL database setup.");
+    toast({
+        title: "Data Fetching Pending",
+        description: "Client receipts will be loaded once the SQL database is configured.",
+        variant: "default"
+    });
+    setReceipts([]); // Initialize with empty array
+    setLoading(false);
   }, [toast]);
 
   useEffect(() => {
@@ -146,31 +124,28 @@ function ClientBillListContent() {
       currentReceipts = currentReceipts.filter(receipt => {
         if (!receipt.issueDate || typeof receipt.issueDate !== 'string') return false;
         try {
-          // Assuming issueDate is stored as ISO string (e.g., "2023-04-21T...")
-          // We only need to compare the date part.
           const issueDateOnly = receipt.issueDate.substring(0, 10);
           return issueDateOnly === filterDateStr;
-        } catch (e) { return false; } // Should not happen if issueDate is ISO string
+        } catch (e) { return false; } 
       });
     }
     setFilteredReceipts(currentReceipts);
   }, [debouncedShopName, debouncedClientName, debouncedPhoneNumber, debouncedDateFilter, receipts]);
 
   const handleViewReceipt = (receipt: ClientReceipt) => {
-    // Navigate to the details page, passing necessary identifiers
     router.push(`/receipt/details?clientId=${receipt.clientId}&clientName=${encodeURIComponent(receipt.clientName)}&receiptId=${receipt.id}`);
   };
 
   const handleDeleteReceipt = async (receiptToDelete: ClientReceipt) => {
-    try {
-      const receiptRef = doc(db, 'ClientReceipts', receiptToDelete.id);
-      await deleteDoc(receiptRef);
-      setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id)); // Update local state
-      toast({title: 'Success', description: `Receipt for ${receiptToDelete.clientName} deleted.`});
-    } catch (error) {
-      console.error('Error deleting receipt:', error);
-      toast({variant: 'destructive', title: 'Error Deleting Receipt', description: 'Could not delete receipt. Check console for details.'});
-    }
+    // TODO: Implement SQL data deletion for client receipt
+    // Example: await deleteClientReceiptFromSQL(receiptToDelete.id);
+    // setReceipts(prevReceipts => prevReceipts.filter(r => r.id !== receiptToDelete.id));
+    console.warn(`Delete operation for receipt ID ${receiptToDelete.id} not implemented. Waiting for SQL database setup.`);
+    toast({
+        title: "Delete Operation Pending",
+        description: `Receipt for ${receiptToDelete.clientName} will be deleted once SQL DB is configured.`,
+        variant: "default"
+    });
   };
 
   return (
@@ -178,7 +153,7 @@ function ClientBillListContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Client Bills</CardTitle>
-          <CardDescription>View and manage client receipts. Slow loading? Check Firestore index for 'ClientReceipts' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
+          <CardDescription>View and manage client receipts. Data will be loaded from SQL database once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -200,7 +175,7 @@ function ClientBillListContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading client receipts... If slow, ensure a Firestore index for 'ClientReceipts' on 'createdAt' (descending) is active. See firestore.indexes.md.
+                Loading client receipts... Please wait for SQL database configuration.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
@@ -249,7 +224,7 @@ function ClientBillListContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No client receipts found for current filters. If loading was slow, check Firestore indexes for 'ClientReceipts' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
+              <p className="text-muted-foreground text-center">No client receipts found for current filters. Waiting for SQL database configuration.</p>
             )}
           </ScrollArea>
         </CardContent>

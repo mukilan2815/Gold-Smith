@@ -3,7 +3,7 @@
 import type { ChangeEvent } from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, query, orderBy, Timestamp, DocumentData, limit } from 'firebase/firestore'; 
+// import { collection, getDocs, query, orderBy, Timestamp, DocumentData, limit } from 'firebase/firestore'; // Firebase removed
 import { format, parseISO, isValid } from 'date-fns'; 
 import { Calendar as CalendarIcon, Eye, Edit } from 'lucide-react';
 
@@ -16,10 +16,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
+// import { db } from '@/lib/firebase'; // Firebase removed
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce'; 
 
+// Keep interfaces for data structure, will be mapped from SQL later
 interface GivenItemFirestore {
   productName: string;
   pureWeight: string;
@@ -60,8 +61,8 @@ interface AdminReceipt {
   given: GivenData | null;
   received: ReceivedData | null;
   status: 'complete' | 'incomplete' | 'empty';
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: Date; // Changed from Timestamp
+  updatedAt: Date; // Changed from Timestamp
 }
 
 export default function AdminBillListPage() {
@@ -87,37 +88,17 @@ function AdminBillListContent() {
 
    const fetchReceipts = useCallback(async () => {
      setLoading(true);
-     try {
-       const receiptsRef = collection(db, 'AdminReceipts');
-       // Querying by 'createdAt' (desc) requires an index.
-       const q = query(receiptsRef, orderBy('createdAt', 'desc'), limit(50)); 
-       const querySnapshot = await getDocs(q);
-       const fetchedReceipts: AdminReceipt[] = [];
-       querySnapshot.forEach((docSnap) => {
-         const data = docSnap.data() as DocumentData; 
-         
-         fetchedReceipts.push({
-           id: docSnap.id,
-           clientId: data.clientId || '',
-           clientName: data.clientName || 'Unknown Client',
-           given: data.given || null, // Assume structure matches GivenData or null
-           received: data.received || null, // Assume structure matches ReceivedData or null
-           status: data.status || 'empty',
-           createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.now(), 
-           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.now(), 
-         }); 
-       });
-       setReceipts(fetchedReceipts);
-     } catch (error) {
-       console.error("Error fetching admin receipts:", error);
-       toast({ 
-         variant: "destructive", 
-         title: "Error Fetching Admin Receipts", 
-         description: "Could not load admin receipts. This often means a Firestore index is missing. Please ensure an index on 'AdminReceipts' collection for 'createdAt' field (descending) exists. Check console and firestore.indexes.md." 
-        });
-     } finally {
-       setLoading(false);
-     }
+     // TODO: Implement SQL data fetching here
+     // Example: const fetchedReceipts = await fetchAdminReceiptsFromSQL();
+     // setReceipts(fetchedReceipts);
+     console.warn("Data fetching not implemented. Waiting for SQL database setup.");
+     toast({
+        title: "Data Fetching Pending",
+        description: "Admin receipts will be loaded once the SQL database is configured.",
+        variant: "default"
+     });
+     setReceipts([]); // Initialize with empty array
+     setLoading(false);
    }, [toast]);
 
 
@@ -135,7 +116,6 @@ function AdminBillListContent() {
     if (debouncedDateFilter && isValid(debouncedDateFilter)) {
        const filterDateStr = format(debouncedDateFilter, 'yyyy-MM-dd');
         currentReceipts = currentReceipts.filter(receipt => {
-            // Check against given date, received date, createdAt, or updatedAt
             let givenDateMatch = false;
             if (receipt.given?.date && isValid(parseISO(receipt.given.date))) {
                 if (format(parseISO(receipt.given.date), 'yyyy-MM-dd') === filterDateStr) givenDateMatch = true;
@@ -148,10 +128,10 @@ function AdminBillListContent() {
             }
             if (receivedDateMatch) return true;
             
-            const createdAtDate = receipt.createdAt?.toDate();
+            const createdAtDate = receipt.createdAt; // Already a Date object
             if (createdAtDate && isValid(createdAtDate) && format(createdAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
             
-            const updatedAtDate = receipt.updatedAt?.toDate();
+            const updatedAtDate = receipt.updatedAt; // Already a Date object
             if (updatedAtDate && isValid(updatedAtDate) && format(updatedAtDate, 'yyyy-MM-dd') === filterDateStr) return true;
             
             return false; 
@@ -182,7 +162,7 @@ function AdminBillListContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Admin Bill - View Receipts</CardTitle>
-          <CardDescription>View and manage admin receipts. Slow loading? Check Firestore index for 'AdminReceipts' on 'createdAt' (descending). See firestore.indexes.md.</CardDescription>
+          <CardDescription>View and manage admin receipts. Data will be loaded from the SQL database once configured.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -202,13 +182,13 @@ function AdminBillListContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading admin receipts... If slow, ensure Firestore index for 'AdminReceipts' on 'createdAt' (descending) is active. Refer to firestore.indexes.md.
+                Loading admin receipts... Please wait for SQL database configuration.
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
                 {filteredReceipts.map((receipt) => {
                   const statusVariant = getStatusVariant(receipt.status);
-                  const displayDate = receipt.updatedAt?.toDate() ?? receipt.createdAt?.toDate(); // Prefer updatedAt
+                  const displayDate = receipt.updatedAt ?? receipt.createdAt; // Prefer updatedAt
                   return (
                     <li key={receipt.id} className="border rounded-md p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-card hover:bg-muted/50 transition-colors">
                       <div className="mb-3 md:mb-0 md:flex-1">
@@ -230,7 +210,7 @@ function AdminBillListContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No admin receipts found for current filters. If loading was slow, check Firestore indexes for 'AdminReceipts' on 'createdAt' (descending). Refer to firestore.indexes.md.</p>
+              <p className="text-muted-foreground text-center">No admin receipts found for current filters. Waiting for SQL database configuration.</p>
             )}
           </ScrollArea>
         </CardContent>
