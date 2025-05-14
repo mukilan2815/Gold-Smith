@@ -1,14 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Layout from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Save } from 'lucide-react';
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Layout from "@/components/Layout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Save } from "lucide-react";
 
 interface Client {
   id: string;
@@ -21,7 +27,15 @@ interface Client {
 export default function EditCustomerPage() {
   return (
     <Layout>
-      <EditCustomerContent />
+      <Suspense
+        fallback={
+          <div className="flex justify-center items-center min-h-screen p-4">
+            <p>Loading...</p>
+          </div>
+        }
+      >
+        <EditCustomerContent />
+      </Suspense>
     </Layout>
   );
 }
@@ -30,26 +44,26 @@ function EditCustomerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const clientId = searchParams.get('clientId');
+  const clientId = searchParams.get("clientId");
 
   const [client, setClient] = useState<Client>({
-    id: '',
-    shopName: '',
-    clientName: '',
-    phoneNumber: '',
-    address: ''
+    id: "",
+    shopName: "",
+    clientName: "",
+    phoneNumber: "",
+    address: "",
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!clientId) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error", 
-        description: "Client ID is missing. Cannot load details." 
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Client ID is missing. Cannot load details.",
       });
-      router.push('/customer-details');
+      router.push("/customer-details");
       return;
     }
 
@@ -57,28 +71,32 @@ function EditCustomerContent() {
       setLoading(true);
       try {
         const response = await fetch(`/api/clients/${clientId}`);
-        
+
         if (!response.ok) {
-          throw new Error('Failed to fetch client details');
+          throw new Error("Failed to fetch client details");
         }
-        
+
         const clientData = await response.json();
-        
+
         setClient({
           id: clientData._id || clientData.id,
-          shopName: clientData.shopName || '',
-          clientName: clientData.clientName || '',
-          phoneNumber: clientData.phoneNumber || '',
-          address: clientData.address || ''
+          shopName: clientData.shopName || "",
+          clientName: clientData.clientName || "",
+          phoneNumber: clientData.phoneNumber || "",
+          address: clientData.address || "",
         });
       } catch (error) {
-        console.error(`Error fetching client details for ID ${clientId}:`, error);
+        console.error(
+          `Error fetching client details for ID ${clientId}:`,
+          error
+        );
         toast({
-          variant: 'destructive',
-          title: 'Error Fetching Client',
-          description: 'There was a problem loading client details. Please try again.'
+          variant: "destructive",
+          title: "Error Fetching Client",
+          description:
+            "There was a problem loading client details. Please try again.",
         });
-        router.push('/customer-details');
+        router.push("/customer-details");
       } finally {
         setLoading(false);
       }
@@ -89,9 +107,9 @@ function EditCustomerContent() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setClient(prev => ({
+    setClient((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -101,36 +119,37 @@ function EditCustomerContent() {
 
     try {
       const response = await fetch(`/api/clients/${clientId}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           shopName: client.shopName,
           clientName: client.clientName,
           phoneNumber: client.phoneNumber,
-          address: client.address
+          address: client.address,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update client');
+        throw new Error("Failed to update client");
       }
 
-      toast({ 
-        title: 'Client Updated', 
-        description: 'Client details have been successfully updated.',
-        variant: 'default'
+      toast({
+        title: "Client Updated",
+        description: "Client details have been successfully updated.",
+        variant: "default",
       });
 
       // Navigate back to client details view
       router.push(`/customer-details/view?clientId=${clientId}`);
     } catch (error) {
-      console.error('Error updating client:', error);
+      console.error("Error updating client:", error);
       toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: 'There was a problem updating the client details. Please try again.'
+        variant: "destructive",
+        title: "Update Failed",
+        description:
+          "There was a problem updating the client details. Please try again.",
       });
     } finally {
       setSubmitting(false);
@@ -138,7 +157,11 @@ function EditCustomerContent() {
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center min-h-screen p-4"><p>Loading client details...</p></div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen p-4">
+        <p>Loading client details...</p>
+      </div>
+    );
   }
 
   return (
@@ -148,10 +171,14 @@ function EditCustomerContent() {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="text-2xl">Edit Client Details</CardTitle>
-              <CardDescription>Update information for {client.clientName}</CardDescription>
+              <CardDescription>
+                Update information for {client.clientName}
+              </CardDescription>
             </div>
-            <Button 
-              onClick={() => router.push(`/customer-details/view?clientId=${clientId}`)} 
+            <Button
+              onClick={() =>
+                router.push(`/customer-details/view?clientId=${clientId}`)
+              }
               variant="outline"
               size="sm"
             >
@@ -172,7 +199,7 @@ function EditCustomerContent() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="clientName">Client Name</Label>
               <Input
@@ -184,7 +211,7 @@ function EditCustomerContent() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="phoneNumber">Phone Number</Label>
               <Input
@@ -196,7 +223,7 @@ function EditCustomerContent() {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
               <Input
@@ -208,15 +235,15 @@ function EditCustomerContent() {
                 required
               />
             </div>
-            
+
             <div className="pt-4">
-              <Button 
-                type="submit" 
-                className="w-full md:w-auto" 
+              <Button
+                type="submit"
+                className="w-full md:w-auto"
                 disabled={submitting}
               >
                 {submitting ? (
-                  'Saving...' 
+                  "Saving..."
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" /> Save Changes
