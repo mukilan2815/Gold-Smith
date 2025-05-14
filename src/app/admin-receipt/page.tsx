@@ -42,18 +42,40 @@ function AdminReceiptSelectContent() {
 
   const fetchClients = useCallback(async () => {
      setLoading(true);
-     // TODO: Implement MongoDB data fetching for clients
-     // Example: const fetchedClients = await fetchClientsFromMongoDB({ filters });
-     // setClients(fetchedClients.map(c => ({...c, id: c._id.toString()})));
-     console.warn("Client data fetching not implemented. Waiting for MongoDB setup.");
-     toast({
-         title: "Data Fetching Pending",
-         description: "Client list will be loaded once MongoDB is configured.",
-         variant: "default"
-     });
-     setClients([]); 
-     setLoading(false);
-   }, [toast]); 
+     try {
+       // Build query params for filtering if needed
+       const queryParams = new URLSearchParams();
+       if (debouncedShopName) queryParams.append('shopName', debouncedShopName);
+       if (debouncedClientName) queryParams.append('clientName', debouncedClientName);
+       if (debouncedPhoneNumber) queryParams.append('phoneNumber', debouncedPhoneNumber);
+       
+       // Fetch clients from API
+       const response = await fetch(`/api/clients?${queryParams}`);
+       
+       if (!response.ok) {
+         throw new Error('Failed to fetch clients');
+       }
+       
+       const data = await response.json();
+       
+       // Transform MongoDB _id to id for frontend use
+       setClients(data.map((client: any) => ({
+         ...client,
+         id: client._id ? client._id.toString() : `temp-${Math.random().toString(36).substr(2, 9)}`
+       })));
+     } catch (error) {
+       console.error('Error fetching clients:', error);
+       toast({
+         variant: 'destructive',
+         title: 'Error Fetching Clients',
+         description: 'There was a problem loading client data. Please try again.'
+       });
+       setClients([]);
+     } finally {
+       setLoading(false);
+     }
+   }, [toast, debouncedShopName, debouncedClientName, debouncedPhoneNumber]);
+
 
   useEffect(() => {
     fetchClients();

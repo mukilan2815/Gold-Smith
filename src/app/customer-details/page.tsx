@@ -9,7 +9,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
-import { Eye } from 'lucide-react';
+import { Eye, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface Client {
   id: string; // MongoDB _id as string
@@ -43,18 +54,40 @@ function CustomerDetailsListContent() {
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement MongoDB data fetching for clients
-    // Example: const fetchedClients = await fetchClientsFromMongoDB({ filters });
-    // setClients(fetchedClients.map(c => ({...c, id: c._id.toString()})));
-    console.warn("Client data fetching not implemented. Waiting for MongoDB setup.");
-    toast({
-        title: "Data Fetching Pending",
-        description: "Client list for customer details will be loaded once MongoDB is configured.",
-        variant: "default"
-    });
-    setClients([]); 
-    setLoading(false);
-  }, [toast]);
+    try {
+      // Build query params for filtering if needed
+      const queryParams = new URLSearchParams();
+      if (debouncedShopName) queryParams.append('shopName', debouncedShopName);
+      if (debouncedClientName) queryParams.append('clientName', debouncedClientName);
+      if (debouncedPhoneNumber) queryParams.append('phoneNumber', debouncedPhoneNumber);
+      
+      // Fetch clients from API
+      const response = await fetch(`/api/clients?${queryParams}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch clients');
+      }
+      
+      const data = await response.json();
+      
+      // Transform MongoDB _id to id for frontend use
+      setClients(data.map((client: any) => ({
+        ...client,
+        id: client._id ? client._id.toString() : `temp-${Math.random().toString(36).substr(2, 9)}`
+      })));
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error Fetching Clients',
+        description: 'There was a problem loading client data. Please try again.'
+      });
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, debouncedShopName, debouncedClientName, debouncedPhoneNumber]);
+
 
   useEffect(() => {
     fetchClients();
@@ -77,6 +110,35 @@ function CustomerDetailsListContent() {
 
   const handleViewClientDetails = (client: Client) => {
     router.push(`/customer-details/view?clientId=${client.id}&clientName=${encodeURIComponent(client.clientName)}`);
+  };
+
+  const handleDeleteClient = async (clientToDelete: Client) => {
+    try {
+      // Call API to delete the client
+      const response = await fetch(`/api/clients/${clientToDelete.id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete client');
+      }
+      
+      toast({ 
+        title: 'Client Deleted', 
+        description: `Client ${clientToDelete.clientName} has been successfully deleted.`,
+        variant: 'default'
+      });
+      
+      // Update the client list
+      setClients(prevClients => prevClients.filter(client => client.id !== clientToDelete.id));
+    } catch (error) {
+      console.error(`Error deleting client ID ${clientToDelete.id}:`, error);
+      toast({
+        variant: 'destructive',
+        title: 'Delete Failed',
+        description: 'There was a problem deleting the client. Please try again.'
+      });
+    }
   };
 
   return (
@@ -107,9 +169,28 @@ function CustomerDetailsListContent() {
                       <p className="text-sm text-muted-foreground">Phone: {client.phoneNumber}</p>
                       <p className="text-sm text-muted-foreground">Address: {client.address}</p>
                     </div>
-                    <Button onClick={() => handleViewClientDetails(client)} className="mt-2 md:mt-0" size="sm" variant="outline">
-                      <Eye className="mr-2 h-4 w-4" /> View Details
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={() => handleViewClientDetails(client)} className="mt-2 md:mt-0" size="sm" variant="outline">
+                        <Eye className="mr-2 h-4 w-4" /> View Details
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" className="mt-2 md:mt-0 flex items-center gap-1">
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This action cannot be undone. This will permanently delete the client {client.clientName} and all associated data.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteClient(client)}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </li>
                 ))}
               </ul>

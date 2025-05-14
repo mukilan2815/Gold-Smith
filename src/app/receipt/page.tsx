@@ -54,18 +54,39 @@ function ClientReceiptSelectContent() {
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
-    // TODO: Implement MongoDB data fetching for clients
-    // Example: const fetchedClients = await fetchClientsFromMongoDB({filters}); // Pass filters if needed
-    // setClients(fetchedClients.map(c => ({...c, id: c._id.toString()})));
-    console.warn("Client data fetching not implemented. Waiting for MongoDB setup.");
-    toast({
-        title: "Data Fetching Pending",
-        description: "Client list for receipts will be loaded once MongoDB is configured.",
-        variant: "default"
-    });
-    setClients([]); 
-    setLoading(false);
-  }, [toast]);
+    try {
+      // Build query params for filtering if needed
+      const queryParams = new URLSearchParams();
+      if (debouncedShopName) queryParams.append('shopName', debouncedShopName);
+      if (debouncedClientName) queryParams.append('clientName', debouncedClientName);
+      if (debouncedPhoneNumber) queryParams.append('phoneNumber', debouncedPhoneNumber);
+      
+      // Fetch clients from API
+      const response = await fetch(`/api/clients?${queryParams}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch clients');
+      }
+      
+      const data = await response.json();
+      
+      // Transform MongoDB _id to id for frontend use
+      setClients(data.map((client: any) => ({
+        ...client,
+        id: client._id ? client._id.toString() : `temp-${Math.random().toString(36).substr(2, 9)}`
+      })));
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error Fetching Clients',
+        description: 'There was a problem loading client data. Please try again.'
+      });
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast, debouncedShopName, debouncedClientName, debouncedPhoneNumber]);
 
   useEffect(() => {
     fetchClients();
@@ -133,25 +154,8 @@ function ClientReceiptSelectContent() {
                     </div>
                      <div className="flex flex-col md:flex-row gap-2 mt-2 md:mt-0">
                        <Button onClick={() => handleClientSelection(client)} className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground rounded-md" size="sm">
-                         Create/View Receipt
+                         Create Receipt
                        </Button>
-                       <AlertDialog>
-                         <AlertDialogTrigger asChild>
-                           <Button variant="destructive" size="sm" className="w-full md:w-auto">Delete Client</Button>
-                         </AlertDialogTrigger>
-                         <AlertDialogContent>
-                           <AlertDialogHeader>
-                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                             <AlertDialogDescription>This action cannot be undone. This will permanently delete the client and all associated receipts. This is a critical operation.</AlertDialogDescription>
-                           </AlertDialogHeader>
-                           <AlertDialogFooter>
-                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                             <AlertDialogAction onClick={() => handleDeleteClient(client)} className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}>
-                               Delete Client
-                             </AlertDialogAction>
-                           </AlertDialogFooter>
-                         </AlertDialogContent>
-                       </AlertDialog>
                     </div>
                   </li>
                 ))}

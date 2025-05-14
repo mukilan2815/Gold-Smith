@@ -100,24 +100,36 @@ function AdminBillViewContent() {
         return;
       }
       setLoading(true);
-      // TODO: Implement MongoDB data fetching for the specific AdminReceipt
-      // Example: const data = await fetchAdminReceiptFromMongoDB(receiptId);
-      // if (data) {
-      //   setReceiptData({...data, id: data._id.toString()}); // Map _id to id if needed
-      //   setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
-      //   setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
-      // } else {
-      //   toast({ variant: "destructive", title: "Not Found", description: `Admin receipt with ID ${receiptId} not found.` });
-      //   router.push('/admin-bill');
-      // }
-      console.warn(`Data fetching for admin receipt ID ${receiptId} not implemented. Waiting for MongoDB setup.`);
-      toast({
-          title: "Data Fetching Pending",
-          description: `Details for admin receipt ${receiptId} will be loaded once MongoDB is configured.`,
-          variant: "default"
-      });
-      setReceiptData(null); 
-      setLoading(false);
+      try {
+        // Fetch admin receipt from API
+        const response = await fetch(`/api/admin-bills?receiptId=${receiptId}`);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error('Admin receipt not found');
+          }
+          throw new Error('Failed to fetch admin receipt');
+        }
+        
+        const data = await response.json();
+        
+        // Set receipt data
+        setReceiptData(data);
+        
+        // Set calculator input values
+        setGivenTotalInput(data.given?.total?.toFixed(3) ?? '');
+        setReceivedTotalInput(data.received?.total?.toFixed(3) ?? '');
+      } catch (error) {
+        console.error(`Error fetching admin receipt ID ${receiptId}:`, error);
+        toast({
+          variant: 'destructive',
+          title: 'Error Fetching Receipt',
+          description: error.message || 'There was a problem loading receipt data. Please try again.'
+        });
+        router.push('/admin-bill');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchReceipt();

@@ -87,18 +87,49 @@ function AdminBillListContent() {
 
    const fetchReceipts = useCallback(async () => {
      setLoading(true);
-     // TODO: Implement MongoDB data fetching for AdminReceipts
-     // Example: const fetchedReceipts = await fetchAdminReceiptsFromMongoDB({ filters });
-     // setReceipts(fetchedReceipts.map(r => ({...r, id: r._id.toString()})));
-     console.warn("Admin receipts fetching not implemented. Waiting for MongoDB setup.");
-     toast({
-        title: "Data Fetching Pending",
-        description: "Admin receipts will be loaded once MongoDB is configured.",
-        variant: "default"
-     });
-     setReceipts([]); 
-     setLoading(false);
-   }, [toast]);
+     try {
+       // Build query params for filtering
+       const queryParams = new URLSearchParams();
+       if (debouncedClientName) queryParams.append('clientName', debouncedClientName);
+       if (debouncedDateFilter) queryParams.append('date', format(debouncedDateFilter, 'yyyy-MM-dd'));
+       
+       // Fetch admin receipts from API
+       const response = await fetch(`/api/admin-bills?${queryParams}`);
+       
+       if (!response.ok) {
+         throw new Error('Failed to fetch admin bills');
+       }
+       
+       const data = await response.json();
+       
+       // Transform MongoDB _id to id for frontend use
+       setReceipts(data.map((receipt: any) => ({
+         ...receipt,
+         id: receipt._id.toString(),
+         // Ensure dates are properly handled
+         given: receipt.given ? {
+           ...receipt.given,
+           date: receipt.given.date ? new Date(receipt.given.date) : null
+         } : null,
+         received: receipt.received ? {
+           ...receipt.received,
+           date: receipt.received.date ? new Date(receipt.received.date) : null
+         } : null,
+         createdAt: receipt.createdAt ? new Date(receipt.createdAt) : new Date(),
+         updatedAt: receipt.updatedAt ? new Date(receipt.updatedAt) : new Date()
+       })));
+     } catch (error) {
+       console.error('Error fetching admin receipts:', error);
+       toast({
+         variant: 'destructive',
+         title: 'Error Fetching Admin Receipts',
+         description: 'There was a problem loading receipt data. Please try again.'
+       });
+       setReceipts([]);
+     } finally {
+       setLoading(false);
+     }
+   }, [toast, debouncedClientName, debouncedDateFilter]);
 
 
   useEffect(() => {
@@ -162,7 +193,7 @@ function AdminBillListContent() {
       <Card className="w-full max-w-5xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">Admin Bill - View Receipts</CardTitle>
-          <CardDescription>View and manage admin receipts. Data will be loaded from MongoDB once configured.</CardDescription>
+          <CardDescription>View and manage admin receipts.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -182,7 +213,7 @@ function AdminBillListContent() {
           <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
             {loading ? (
               <p className="text-muted-foreground text-center">
-                Loading admin receipts... Please wait for MongoDB configuration.
+                Loading admin receipts...
               </p>
             ) : filteredReceipts.length > 0 ? (
               <ul className="space-y-3">
@@ -210,7 +241,7 @@ function AdminBillListContent() {
                 })}
               </ul>
             ) : (
-              <p className="text-muted-foreground text-center">No admin receipts found for current filters. Waiting for MongoDB configuration.</p>
+              <p className="text-muted-foreground text-center">No admin receipts found.</p>
             )}
           </ScrollArea>
         </CardContent>

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "env": {
+    "MONGODB_URI": "@mongodb_uri"
+  },
+  "github": {
+    "silent": true
+  }
+}

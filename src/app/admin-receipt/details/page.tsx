@@ -159,26 +159,44 @@ function AdminReceiptDetailsContent() {
       if (receiptIdParam) { 
         setLoading(true);
         setCurrentReceiptId(receiptIdParam);
-        // TODO: Implement MongoDB data fetching for existing AdminReceipt
-        // Example: const data = await fetchAdminReceiptFromMongoDB(receiptIdParam);
-        // if (data) { 
-        //    setDateGiven(data.given?.date ? new Date(data.given.date) : undefined);
-        //    setGivenItems(data.given?.items.map(item => ({ id: generateId(), ...item })) || [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
-        //    setDateReceived(data.received?.date ? new Date(data.received.date) : undefined);
-        //    setReceivedItems(data.received?.items.map(item => ({ id: generateId(), ...item, subTotal: calculateReceivedSubTotal(item as any), total: calculateReceivedTotal(item as any) })) || [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
-        //    // Set manual totals if needed from loaded data, though they are not stored.
-        // } else { 
-        //    toast({variant: "destructive", title: "Not Found", description: `Admin receipt ${receiptIdParam} not found.`});
-        //    resetFormForNewReceipt(); 
-        // }
-        console.warn(`Data fetching for admin receipt ID ${receiptIdParam} not implemented. Waiting for MongoDB setup.`);
-        toast({
-            title: "Data Fetching Pending",
-            description: `Admin receipt details for ${receiptIdParam} will be loaded once MongoDB is configured.`,
-            variant: "default"
-        });
-        // resetFormForNewReceipt(); // Default to new if fetching fails or not implemented
-        setLoading(false);
+        try {
+          // Fetch admin receipt data from API
+          const response = await fetch(`/api/admin-receipts/${receiptIdParam}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch admin receipt: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          // Set form data from fetched receipt
+          if (data) { 
+            setDateGiven(data.given?.date ? new Date(data.given.date) : undefined);
+            setGivenItems(data.given?.items.map((item: GivenItemMongo) => ({ 
+              id: generateId(), 
+              ...item, 
+              total: parseFloat(item.total.toFixed(3)) 
+            })) || [{ id: generateId(), productName: '', pureWeight: '', purePercent: '', melting: '', total: 0 }]);
+            
+            setDateReceived(data.received?.date ? new Date(data.received.date) : undefined);
+            setReceivedItems(data.received?.items.map((item: ReceivedItemMongo) => ({ 
+              id: generateId(), 
+              ...item, 
+              subTotal: parseFloat(item.subTotal.toFixed(3)), 
+              total: parseFloat(item.total.toFixed(3)) 
+            })) || [{ id: generateId(), productName: '', finalOrnamentsWt: '', stoneWeight: '', makingChargePercent: '', subTotal: 0, total: 0 }]);
+          }
+        } catch (error) {
+          console.error(`Error fetching admin receipt ID ${receiptIdParam}:`, error);
+          toast({
+            variant: "destructive", 
+            title: "Error Loading Receipt", 
+            description: `Could not load admin receipt details. ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
+          resetFormForNewReceipt();
+        } finally {
+          setLoading(false);
+        }
       } else { 
           resetFormForNewReceipt();
           setLoading(false);
@@ -186,6 +204,7 @@ function AdminReceiptDetailsContent() {
     };
     fetchReceiptData();
   }, [clientId, clientName, receiptIdParam, router, toast, resetFormForNewReceipt]);
+
 
 
   const handleInputChange = <T extends GivenItemUI | ReceivedItemUI>(
@@ -281,9 +300,23 @@ function AdminReceiptDetailsContent() {
 
     let existingData: AdminReceiptData | null = null;
     if (currentReceiptId) {
-      // TODO: Fetch existing document from MongoDB to merge data if needed.
-      // existingData = await fetchAdminReceiptFromMongoDB(currentReceiptId);
-      console.warn(`Fetching existing admin receipt ${currentReceiptId} for merge not implemented. Waiting for MongoDB setup.`);
+      try {
+        // Fetch existing admin receipt data from API
+        const response = await fetch(`/api/admin-receipts/${currentReceiptId}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch admin receipt: ${response.status}`);
+        }
+        
+        existingData = await response.json();
+      } catch (error) {
+        console.error(`Error fetching admin receipt ID ${currentReceiptId}:`, error);
+        toast({
+          variant: "destructive", 
+          title: "Error Loading Receipt", 
+          description: `Could not load existing admin receipt details. ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
     }
     
     if (saveType === 'given' && hasGivenDataForSave) {
@@ -328,31 +361,56 @@ function AdminReceiptDetailsContent() {
 
     dataToSave.updatedAt = new Date();
 
-    // TODO: Implement MongoDB save/update logic
-    // if (currentReceiptId) {
-    //   await updateAdminReceiptInMongoDB(currentReceiptId, dataToSave);
-    // } else {
-    //   dataToSave.createdAt = new Date();
-    //   const newReceipt = await createAdminReceiptInMongoDB(dataToSave as AdminReceiptData);
-    //   setCurrentReceiptId(newReceipt._id.toString());
-    //   router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${newReceipt._id.toString()}`, { scroll: false });
-    // }
-    console.warn(`Save operation for admin receipt type "${saveType}" not implemented. Waiting for MongoDB setup.`);
-    toast({
-        title: "Save Operation Pending",
-        description: `Admin receipt ${saveType} data for ${clientName} will be saved/updated once MongoDB is configured. Status: ${dataToSave.status}`,
+    try {
+      // Save to MongoDB through API
+      let response;
+      
+      if (currentReceiptId) {
+        // Update existing receipt
+        response = await fetch(`/api/admin-receipts/${currentReceiptId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(dataToSave),
+        });
+      } else {
+        // Create new receipt
+        dataToSave.createdAt = new Date();
+        response = await fetch('/api/admin-receipts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(dataToSave),
+        });
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save admin receipt: ${response.status}`);
+      }
+      
+      const savedData = await response.json();
+      
+      toast({
+        title: "Receipt Saved",
+        description: `Admin receipt ${saveType} data for ${clientName} has been successfully saved. Status: ${dataToSave.status}`,
         variant: "default"
-    });
-    
-    // Simulate save for UI update
-    let tempCurrentReceiptId = currentReceiptId;
-    if (!tempCurrentReceiptId) {
-        tempCurrentReceiptId = `temp_mongo_id_${Date.now()}`; // Placeholder
-        setCurrentReceiptId(tempCurrentReceiptId);
-        router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${tempCurrentReceiptId}`, { scroll: false });
+      });
+      
+      // If it was a new receipt, update the current receipt ID and URL
+      if (savedData.id && !currentReceiptId) {
+        setCurrentReceiptId(savedData.id);
+        router.replace(`/admin-receipt/details?clientId=${clientId}&clientName=${encodeURIComponent(clientName!)}&receiptId=${savedData.id}`, { scroll: false });
+      }
+    } catch (error) {
+      console.error('Error saving admin receipt:', error);
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: `There was a problem saving the admin receipt: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
     }
-    
-    toast({ title: 'Simulated Save', description: `Admin receipt ${saveType} data for ${clientName}. Status: ${dataToSave.status}. (MongoDB Save Pending)` });
     setIsSaving(false);
   };
 

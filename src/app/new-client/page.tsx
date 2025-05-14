@@ -41,39 +41,60 @@ function NewClientContent() {
     }
 
     setIsSaving(true);
-    const savingToastId = toast({ // Get the ID of the toast
+    const savingToast = toast({ // Get the toast object with methods
       title: 'Saving Client...',
-      description: 'Please wait. Data will be saved to MongoDB once configured.',
-    }).id;
+      description: 'Please wait while we save your data to MongoDB.',
+    });
 
 
-    // TODO: Implement MongoDB data saving for new client
-    // Example: 
-    // const newClientData = {
-    //   shopName: shopName.trim(),
-    //   clientName: clientName.trim(),
-    //   phoneNumber: phoneNumber.trim(),
-    //   address: address.trim(),
-    //   createdAt: new Date(), 
-    // };
-    // const result = await saveClientToMongoDB(newClientData);
-    // if (result.success) { ... } else { ... }
-    console.warn("Client saving not implemented. Waiting for MongoDB setup.");
-    
-    // Simulate save for UI update
-    setTimeout(() => {
-        setShopName('');
-        setClientName('');
-        setPhoneNumber('');
-        setAddress('');
-        if (savingToastId) { // Check if ID exists before updating
-          toast.update(savingToastId, { 
-              title: 'Client Data Prepared (MongoDB Save Pending)!',
-              description: `${clientName.trim()}'s details prepared. Actual save to MongoDB pending configuration.`,
-          });
-        }
-        setIsSaving(false);
-    }, 1500); // Simulate delay
+    try {
+      // Prepare client data for MongoDB
+      const newClientData = {
+        shopName: shopName.trim(),
+        clientName: clientName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        address: address.trim(),
+      };
+      
+      // Save client to MongoDB using API route
+      const response = await fetch('/api/clients', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newClientData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save client');
+      }
+      
+      const result = await response.json();
+      
+      // Clear form and update UI
+      setShopName('');
+      setClientName('');
+      setPhoneNumber('');
+      setAddress('');
+      
+      if (savingToast) {
+        savingToast.update({ 
+          title: 'Client Saved Successfully!',
+          description: `${newClientData.clientName}'s details have been saved to the database.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error saving client:', error);
+      if (savingToast) {
+        savingToast.update({ 
+          variant: 'destructive',
+          title: 'Error Saving Client',
+          description: 'There was a problem saving the client data. Please try again.',
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -81,7 +102,7 @@ function NewClientContent() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl">New Client</CardTitle>
-          <CardDescription>Enter client details. Data will be saved to MongoDB once configured.</CardDescription>
+          <CardDescription>Enter client details. Data will be saved directly to MongoDB.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
